@@ -1,8 +1,7 @@
 :root {
   font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
   line-height: 1.5;
-  font-weight: 400;
-  color-scheme: light dark;
+  color-scheme: dark;
 }
 
 * {
@@ -12,10 +11,37 @@
 body {
   margin: 0;
   min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #0d1322;
+  color: #d8def0;
 }
 
-#app {
-  max-width: 1280px;
-  margin: 0 auto;
+.boot {
+  max-width: 560px;
   padding: 2rem;
+}
+
+.boot h1 {
+  font-size: 1.4rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  margin: 0 0 0.75rem;
+}
+
+.boot p {
+  color: #8893ad;
+  margin: 0 0 1rem;
+}
+
+.boot pre {
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  font-size: 0.85rem;
+  background: #151c2e;
+  border: 1px solid #2a3450;
+  border-radius: 10px;
+  padding: 14px 16px;
+  margin: 0;
+  color: #e6b45c;
 }
