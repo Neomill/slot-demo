@@ -6,18 +6,18 @@ export class InsufficientFundsError extends Error {
   }
 }
 
-/** Raised when a spin result fails validation (untrusted provider output). */
-export class InvalidSpinResultError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = 'InvalidSpinResultError';
-  }
-}
-
 /** Raised when the state machine is asked to make a transition it disallows. */
 export class IllegalTransitionError extends Error {
   constructor(from: string, to: string) {
     super(`Illegal state transition: ${from} -> ${to}`);
     this.name = 'IllegalTransitionError';
+  }
+}
+
+/** Raised on an invalid bonus action (unknown tier, or buying while not idle/base). */
+export class InvalidBonusError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'InvalidBonusError';
   }
 }

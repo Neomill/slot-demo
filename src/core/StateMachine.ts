@@ -3,20 +3,20 @@ import { IllegalTransitionError } from './errors';
 import type { EventBus } from './EventBus';
 import { GameEvent, type GameEventMap } from '../types/events';
 
-/** The only transitions the game permits. Anything else is a bug. */
+/** The only lifecycle transitions the engine permits. Anything else is a bug. */
 const TRANSITIONS: Record<GameState, GameState[]> = {
   [GameState.LOADING]: [GameState.IDLE, GameState.ERROR],
   [GameState.IDLE]: [GameState.SPINNING],
   [GameState.SPINNING]: [GameState.EVALUATING, GameState.ERROR],
-  [GameState.EVALUATING]: [GameState.IDLE, GameState.FREE_SPINS, GameState.ERROR],
-  [GameState.FREE_SPINS]: [GameState.SPINNING, GameState.IDLE],
+  [GameState.EVALUATING]: [GameState.IDLE, GameState.ERROR],
   [GameState.ERROR]: [GameState.IDLE],
 };
 
 /**
- * Single source of truth for the current game phase. Transitions are validated
- * against TRANSITIONS — an illegal jump throws rather than silently corrupting
- * state. When given an EventBus it emits `state:change` on every real move.
+ * Single source of truth for the spin lifecycle phase. Transitions are
+ * validated against TRANSITIONS — an illegal jump throws rather than silently
+ * corrupting state. When given an EventBus it emits `state:change` on every
+ * real move.
  */
 export class StateMachine {
   private state = GameState.LOADING;
