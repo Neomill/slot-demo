@@ -1,13 +1,26 @@
-import { Application, Assets, Graphics, Sprite, Text, type Ticker, type Texture } from 'pixi.js';
-import type { Game } from '../game/Game';
-import { GameMode } from '../core/GameMode';
-import { GameState } from '../core/GameState';
-import { GameEvent } from '../types/events';
-import { gameConfig } from '../config/gameConfig';
-import { WILD } from '../config/symbols';
-import type { SymbolId } from '../config/symbols';
-import type { Position, SpinResult } from '../types/slot';
-import { BACKGROUNDS, FRAME as FRAME_TEXTURE, LOGO, ALL_ASSET_URLS } from '../assets/manifest';
+import {
+  Application,
+  Assets,
+  Graphics,
+  Sprite,
+  Text,
+  type Ticker,
+  type Texture,
+} from "pixi.js";
+import type { Game } from "../game/Game";
+import { GameMode } from "../core/GameMode";
+import { GameState } from "../core/GameState";
+import { GameEvent } from "../types/events";
+import { gameConfig } from "../config/gameConfig";
+import { WILD } from "../config/symbols";
+import type { SymbolId } from "../config/symbols";
+import type { Position, SpinResult } from "../types/slot";
+import {
+  BACKGROUNDS,
+  FRAME as FRAME_TEXTURE,
+  LOGO,
+  ALL_ASSET_URLS,
+} from "../assets/manifest";
 import {
   BACKDROP,
   CANVAS,
@@ -19,18 +32,18 @@ import {
   REEL_ORIGIN,
   fontFamily,
   colors,
-} from './theme';
-import { Reels } from './Reels';
-import { Hud } from './hud';
+} from "./theme";
+import { Reels } from "./Reels";
+import { Hud } from "./hud";
 
 // Pleasant resting board shown before the first spin.
 // Resting board: no prize horses here, so nothing shows a value before a spin.
 const INITIAL_GRID: SymbolId[][] = [
-  ['jocky', 'ten', 'jack'],
-  ['shoehorse', 'queen', 'king'],
-  ['binoculars', 'ace', 'jocky'],
-  ['cap', 'ten', 'shoehorse'],
-  ['jack', 'king', 'queen'],
+  ["jocky", "ten", "jack"],
+  ["shoehorse", "queen", "king"],
+  ["binoculars", "ace", "jocky"],
+  ["cap", "ten", "shoehorse"],
+  ["jack", "king", "queen"],
 ];
 
 /** Positions of every Wild on the board — the collect target during free spins. */
@@ -49,7 +62,7 @@ const BONUS_SPIN_DELAY = 700;
 
 /** Ensure Barlow Condensed is ready before Pixi rasterizes any text with it. */
 async function loadFonts(): Promise<void> {
-  if (!('fonts' in document)) return;
+  if (!("fonts" in document)) return;
   try {
     await Promise.all([
       document.fonts.load('600 16px "Barlow Condensed"'),
@@ -110,7 +123,9 @@ export class SlotScene {
   private build(): void {
     const stage = this.app.stage;
 
-    this.background = new Sprite(Assets.get<Texture>(BACKGROUNDS[GameMode.BASE]));
+    this.background = new Sprite(
+      Assets.get<Texture>(BACKGROUNDS[GameMode.BASE]),
+    );
     this.background.width = CANVAS.width;
     this.background.height = CANVAS.height;
 
@@ -140,19 +155,27 @@ export class SlotScene {
       onSpin: () => void this.game.spin(),
       onBet: (direction) => this.changeBet(direction),
       onTurbo: () => this.game.setChance2x(!this.game.isChance2x),
-      onMenu: () => console.info('[menu] not implemented yet'),
+      onMenu: () => console.info("[menu] not implemented yet"),
     });
     this.hud.position.set(HUD_POS.x, HUD_POS.y);
 
     this.status = new Text({
-      text: '',
-      style: { fill: colors.text, fontFamily, fontSize: 22, fontWeight: '700' },
+      text: "",
+      style: { fill: colors.text, fontFamily, fontSize: 22, fontWeight: "700" },
     });
     this.status.anchor.set(0.5, 0);
     this.status.position.set(CANVAS.width / 2, HUD_POS.y + HUD.height + 14);
 
     // background → backdrop → reels → frame → logo → HUD → status
-    stage.addChild(this.background, backdrop, this.reels, frame, logo, this.hud, this.status);
+    stage.addChild(
+      this.background,
+      backdrop,
+      this.reels,
+      frame,
+      logo,
+      this.hud,
+      this.status,
+    );
   }
 
   private subscribe(): void {
@@ -175,11 +198,13 @@ export class SlotScene {
     });
     // Total Win is shown by render() once the reels land (see Spin Results).
     events.on(GameEvent.SpinSettled, () => this.updateStatus());
-    events.on(GameEvent.ChanceChange, ({ enabled }) => this.hud.setTurbo(enabled));
+    events.on(GameEvent.ChanceChange, ({ enabled }) =>
+      this.hud.setTurbo(enabled),
+    );
     events.on(GameEvent.FreeSpinsStart, ({ trigger }) => {
       this.updateStatus();
       // A bought bonus has no triggering spin, so start the auto-play here.
-      if (trigger === 'buy') this.scheduleNextBonusSpin();
+      if (trigger === "buy") this.scheduleNextBonusSpin();
     });
     events.on(GameEvent.WildsCollected, () => this.updateStatus());
     events.on(GameEvent.HoldRespinStart, () => this.updateStatus());
@@ -205,7 +230,11 @@ export class SlotScene {
 
     // Free spins: Wilds collect the prizes — detach the badges and fly them into the Wild.
     if (result.mode === GameMode.FREE_SPINS && (result.collectWin ?? 0) > 0) {
-      await this.reels.collectIntoWild(result.prizes, wildPositions(result.grid), this.game.betPerLine);
+      await this.reels.collectIntoWild(
+        result.prizes,
+        wildPositions(result.grid),
+        this.game.betPerLine,
+      );
     }
 
     this.hud.setWin(result.totalWin);
@@ -237,7 +266,10 @@ export class SlotScene {
     if (this.autoTimer !== null) return; // one pending at a time
     this.autoTimer = window.setTimeout(() => {
       this.autoTimer = null;
-      if (this.game.currentMode !== GameMode.BASE && this.game.currentState === GameState.IDLE) {
+      if (
+        this.game.currentMode !== GameMode.BASE &&
+        this.game.currentState === GameState.IDLE
+      ) {
         void this.game.spin();
       }
     }, BONUS_SPIN_DELAY);
@@ -246,7 +278,8 @@ export class SlotScene {
   private changeBet(direction: 1 | -1): void {
     const levels = gameConfig.betLevels as readonly number[];
     const index = levels.indexOf(this.game.betPerLine);
-    const next = levels[Math.min(levels.length - 1, Math.max(0, index + direction))];
+    const next =
+      levels[Math.min(levels.length - 1, Math.max(0, index + direction))];
     if (next !== this.game.betPerLine) this.game.setBet(next);
   }
 
