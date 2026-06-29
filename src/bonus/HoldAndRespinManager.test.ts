@@ -8,11 +8,11 @@ function grid(fill: SymbolId): SymbolId[][] {
 }
 
 describe('HoldAndRespinManager', () => {
-  it('locks bonus symbols on start', () => {
+  it('locks trophy symbols on start', () => {
     const m = new HoldAndRespinManager();
-    const g = grid('cherry');
-    g[0][0] = 'bonus';
-    g[1][1] = 'bonus';
+    const g = grid('ace');
+    g[0][0] = 'trophy';
+    g[1][1] = 'trophy';
     m.start(g);
     const snap = m.snapshot();
     expect(snap.remainingRespins).toBe(bonusConfig.holdAndRespin.initialRespins);
@@ -21,19 +21,19 @@ describe('HoldAndRespinManager', () => {
     expect(snap.locked[2][2]).toBe(false);
   });
 
-  it('decrements respins when no new bonus lands', () => {
+  it('decrements respins when no new trophy lands', () => {
     const m = new HoldAndRespinManager();
-    m.start(grid('cherry'));
-    m.respin(grid('cherry'));
+    m.start(grid('ace'));
+    m.respin(grid('ace'));
     expect(m.remaining).toBe(bonusConfig.holdAndRespin.initialRespins - 1);
   });
 
-  it('resets respins and locks when a new bonus lands', () => {
+  it('resets respins and locks when a new trophy lands', () => {
     const m = new HoldAndRespinManager();
-    m.start(grid('cherry'));
-    m.respin(grid('cherry')); // -> 2
-    const candidate = grid('cherry');
-    candidate[0][0] = 'bonus';
+    m.start(grid('ace'));
+    m.respin(grid('ace')); // -> 2
+    const candidate = grid('ace');
+    candidate[0][0] = 'trophy';
     const { newBonus } = m.respin(candidate);
     expect(newBonus).toBe(1);
     expect(m.remaining).toBe(bonusConfig.holdAndRespin.resetRespins);
@@ -42,11 +42,11 @@ describe('HoldAndRespinManager', () => {
 
   it('keeps locked cells fixed across respins', () => {
     const m = new HoldAndRespinManager();
-    const g = grid('cherry');
-    g[0][0] = 'bonus';
+    const g = grid('ace');
+    g[0][0] = 'trophy';
     m.start(g);
-    m.respin(grid('lemon'));
-    expect(m.currentBoard[0][0]).toBe('bonus'); // locked
-    expect(m.currentBoard[0][1]).toBe('lemon'); // respun
+    m.respin(grid('king'));
+    expect(m.currentBoard[0][0]).toBe('trophy'); // locked
+    expect(m.currentBoard[0][1]).toBe('king'); // respun
   });
 });

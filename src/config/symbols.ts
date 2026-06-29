@@ -1,39 +1,54 @@
 /**
- * The full reel alphabet.
- * - `wild` substitutes for normal symbols (Free Spins only).
- * - `scatter` triggers Free Spins from the base game (pays anywhere, no line).
- * - `bonus` triggers Hold & Respin from the base game.
+ * Horse-racing reel alphabet (ids match the art filenames: `symbol-<id>.png`).
+ * - `wild`   substitutes for normal symbols (Free Spins only).
+ * - `bonus`  is the Scatter — 3+ on a base spin trigger Free Spins (pays anywhere).
+ * - `trophy` triggers Hold & Respin — 5 on a base spin, and it locks during the feature.
  */
 export const SYMBOLS = [
-  'cherry',
-  'lemon',
-  'orange',
-  'plum',
-  'bell',
-  'bar',
-  'seven',
+  // royals (low pays)
+  'ace',
+  'king',
+  'queen',
+  'jack',
+  'ten',
+  // themed (high/mid pays)
+  'goldhorse',
+  'redhorse',
+  'bluehorse',
+  'jocky',
+  'cap',
+  'binoculars',
+  'shoehorse',
+  // specials
   'wild',
-  'scatter',
   'bonus',
+  'trophy',
 ] as const;
 
 export type SymbolId = (typeof SYMBOLS)[number];
 
 export const WILD: SymbolId = 'wild';
-export const SCATTER: SymbolId = 'scatter';
-export const BONUS: SymbolId = 'bonus';
+/** Free Spins trigger (the "scatter" mechanic). */
+export const SCATTER: SymbolId = 'bonus';
+/** Hold & Respin trigger / lock symbol (the "bonus" mechanic). */
+export const BONUS: SymbolId = 'trophy';
 
 export type SymbolKind = 'normal' | 'wild' | 'scatter' | 'bonus';
 
 export const SYMBOL_KIND: Record<SymbolId, SymbolKind> = {
-  cherry: 'normal',
-  lemon: 'normal',
-  orange: 'normal',
-  plum: 'normal',
-  bell: 'normal',
-  bar: 'normal',
-  seven: 'normal',
+  ace: 'normal',
+  king: 'normal',
+  queen: 'normal',
+  jack: 'normal',
+  ten: 'normal',
+  goldhorse: 'normal',
+  redhorse: 'normal',
+  bluehorse: 'normal',
+  jocky: 'normal',
+  cap: 'normal',
+  binoculars: 'normal',
+  shoehorse: 'normal',
   wild: 'wild',
-  scatter: 'scatter',
-  bonus: 'bonus',
+  bonus: 'scatter',
+  trophy: 'bonus',
 };

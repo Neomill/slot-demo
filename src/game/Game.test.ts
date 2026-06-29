@@ -8,14 +8,14 @@ import { createSeededRng } from '../core/rng';
 import type { ReelSetId } from '../config/reelStrips';
 import type { SymbolId } from '../config/symbols';
 
-/** A reel grid with no payline win and no scatter/bonus/wild. */
+/** A reel grid with no payline win and no scatter/trophy/wild. */
 function blank(): SymbolId[][] {
   return [
-    ['cherry', 'lemon', 'orange'],
-    ['lemon', 'bar', 'plum'],
-    ['seven', 'bell', 'bar'],
-    ['bell', 'seven', 'cherry'],
-    ['bar', 'plum', 'seven'],
+    ['ace', 'redhorse', 'bluehorse'],
+    ['redhorse', 'jocky', 'cap'],
+    ['ten', 'king', 'jack'],
+    ['king', 'ten', 'queen'],
+    ['jack', 'queen', 'ace'],
   ];
 }
 
@@ -32,22 +32,22 @@ function reelStub(map: Partial<Record<ReelSetId, SymbolId[][]>>): ReelGenerator 
   } as unknown as ReelGenerator;
 }
 
-// Middle payline = seven x3 -> 20 * betPerLine; no other line/scatter/bonus.
-const SEVEN_WIN: SymbolId[][] = [
-  ['cherry', 'seven', 'bar'],
-  ['lemon', 'seven', 'orange'],
-  ['bell', 'seven', 'plum'],
-  ['orange', 'cherry', 'bell'],
-  ['plum', 'lemon', 'cherry'],
+// Middle payline = goldhorse x3 -> 50 * betPerLine; no other line/scatter/trophy.
+const GOLD_WIN: SymbolId[][] = [
+  ['ace', 'goldhorse', 'king'],
+  ['jack', 'goldhorse', 'queen'],
+  ['ten', 'goldhorse', 'cap'],
+  ['king', 'ace', 'jocky'],
+  ['queen', 'jack', 'redhorse'],
 ];
 
 describe('Game — base mode', () => {
   it('deducts the stake, credits the line win, stays in BASE', async () => {
-    const game = new Game({ reelGenerator: reelStub({ base: SEVEN_WIN }), startingBalance: 100, betPerLine: 1 });
+    const game = new Game({ reelGenerator: reelStub({ base: GOLD_WIN }), startingBalance: 100, betPerLine: 1 });
     await game.init();
     const result = await game.spin();
-    expect(result?.totalWin).toBe(20);
-    expect(game.balance).toBe(100 - 5 + 20);
+    expect(result?.totalWin).toBe(50);
+    expect(game.balance).toBe(100 - 5 + 50);
     expect(game.currentMode).toBe(GameMode.BASE);
     expect(game.currentState).toBe(GameState.IDLE);
   });
@@ -82,11 +82,11 @@ describe('Game — base mode', () => {
 });
 
 describe('Game — free spins', () => {
-  it('3 scatters trigger 10 free spins', async () => {
+  it('3 scatters (bonus) trigger 10 free spins', async () => {
     const baseGrid = withCells(blank(), [
-      [0, 0, 'scatter'],
-      [2, 1, 'scatter'],
-      [4, 2, 'scatter'],
+      [0, 0, 'bonus'],
+      [2, 1, 'bonus'],
+      [4, 2, 'bonus'],
     ]);
     const game = new Game({ reelGenerator: reelStub({ base: baseGrid }), startingBalance: 100, betPerLine: 1 });
     await game.init();
@@ -103,7 +103,7 @@ describe('Game — free spins', () => {
     expect(game.balance).toBe(625);
     expect(game.getState().freeSpins?.remaining).toBe(10);
     for (let i = 0; i < 10; i++) await game.spin();
-    expect(game.balance).toBe(625); // blank free spins win nothing, cost nothing
+    expect(game.balance).toBe(625);
     expect(game.currentMode).toBe(GameMode.BASE);
   });
 
@@ -126,14 +126,13 @@ describe('Game — free spins', () => {
 });
 
 describe('Game — hold & respin', () => {
-  it('6 bonus symbols trigger hold & respin and end at zero respins', async () => {
+  it('5 trophies trigger hold & respin and it ends at zero respins', async () => {
     const trigger = withCells(blank(), [
-      [0, 0, 'bonus'],
-      [1, 0, 'bonus'],
-      [2, 0, 'bonus'],
-      [3, 0, 'bonus'],
-      [4, 0, 'bonus'],
-      [0, 1, 'bonus'],
+      [0, 0, 'trophy'],
+      [1, 0, 'trophy'],
+      [2, 0, 'trophy'],
+      [3, 0, 'trophy'],
+      [4, 0, 'trophy'],
     ]);
     const game = new Game({
       reelGenerator: reelStub({ base: trigger, holdAndRespin: blank() }),
@@ -144,8 +143,7 @@ describe('Game — hold & respin', () => {
     await game.spin(); // base spin triggers
     expect(game.currentMode).toBe(GameMode.HOLD_AND_RESPIN);
     expect(game.getState().holdAndRespin?.remainingRespins).toBe(3);
-    // blank respins add no new bonus -> 3 respins to exit
-    for (let i = 0; i < 3; i++) await game.spin();
+    for (let i = 0; i < 3; i++) await game.spin(); // blank respins add no trophy -> exit
     expect(game.currentMode).toBe(GameMode.BASE);
   });
 });

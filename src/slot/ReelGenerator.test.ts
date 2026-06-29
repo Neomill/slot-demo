@@ -17,9 +17,11 @@ describe('ReelGenerator', () => {
     expect(a.generate('base')).toEqual(b.generate('base'));
   });
 
-  it('base strips never contain wild; freeSpins strips contain wild but no scatter', () => {
+  it('keeps wild out of base, and bonus/trophy out of free spins', () => {
     expect(REEL_SETS.base.flat()).not.toContain('wild');
     expect(REEL_SETS.freeSpins.flat()).toContain('wild');
-    expect(REEL_SETS.freeSpins.flat()).not.toContain('scatter');
+    expect(REEL_SETS.freeSpins.flat()).not.toContain('bonus'); // scatter
+    expect(REEL_SETS.freeSpins.flat()).not.toContain('trophy');
+    expect(REEL_SETS.holdAndRespin.flat()).toContain('trophy');
   });
 });

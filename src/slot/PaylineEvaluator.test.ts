@@ -9,67 +9,65 @@ const evaluator = new PaylineEvaluator({ paylines: PAYLINES, paytable: PAYTABLE,
 
 describe('PaylineEvaluator', () => {
   it('pays a 3-of-a-kind on the middle payline', () => {
-    // grid[reel][row]; middle row (1) = seven, seven, seven, cherry, lemon
+    // grid[reel][row]; middle row (1) = goldhorse, goldhorse, goldhorse, ace, jack
     const grid: SymbolId[][] = [
-      ['cherry', 'seven', 'bar'],
-      ['lemon', 'seven', 'orange'],
-      ['bell', 'seven', 'plum'],
-      ['orange', 'cherry', 'bell'],
-      ['plum', 'lemon', 'cherry'],
+      ['ace', 'goldhorse', 'king'],
+      ['jack', 'goldhorse', 'queen'],
+      ['ten', 'goldhorse', 'cap'],
+      ['king', 'ace', 'jocky'],
+      ['queen', 'jack', 'redhorse'],
     ];
     const { lineWins, totalWin } = evaluator.evaluate(grid, 1);
     expect(lineWins).toHaveLength(1);
-    expect(lineWins[0]).toMatchObject({ payline: 0, symbol: 'seven', count: 3, amount: 20 });
-    expect(totalWin).toBe(20);
+    expect(lineWins[0]).toMatchObject({ payline: 0, symbol: 'goldhorse', count: 3, amount: 50 });
+    expect(totalWin).toBe(50);
   });
 
   it('substitutes wilds into a line', () => {
-    // middle row = seven, WILD, seven, cherry, lemon -> seven x3 via the wild
     const grid: SymbolId[][] = [
-      ['bar', 'seven', 'cherry'],
-      ['orange', 'wild', 'plum'],
-      ['bell', 'seven', 'orange'],
-      ['lemon', 'cherry', 'bell'],
-      ['plum', 'lemon', 'bar'],
+      ['ace', 'goldhorse', 'king'],
+      ['jack', 'wild', 'queen'],
+      ['ten', 'goldhorse', 'cap'],
+      ['king', 'ace', 'jocky'],
+      ['queen', 'jack', 'redhorse'],
     ];
     const { lineWins } = evaluator.evaluate(grid, 1);
     expect(lineWins).toHaveLength(1);
-    expect(lineWins[0]).toMatchObject({ symbol: 'seven', count: 3, amount: 20 });
+    expect(lineWins[0]).toMatchObject({ symbol: 'goldhorse', count: 3, amount: 50 });
   });
 
   it('pays a 5-of-a-kind at the top tier', () => {
     const grid: SymbolId[][] = [
-      ['cherry', 'seven', 'bar'],
-      ['lemon', 'seven', 'cherry'],
-      ['orange', 'seven', 'lemon'],
-      ['plum', 'seven', 'orange'],
-      ['bell', 'seven', 'plum'],
+      ['ace', 'goldhorse', 'king'],
+      ['jack', 'goldhorse', 'queen'],
+      ['ten', 'goldhorse', 'cap'],
+      ['king', 'goldhorse', 'jocky'],
+      ['queen', 'goldhorse', 'redhorse'],
     ];
     const { lineWins, totalWin } = evaluator.evaluate(grid, 1);
     expect(lineWins).toHaveLength(1);
-    expect(lineWins[0]).toMatchObject({ count: 5, amount: 200 });
-    expect(totalWin).toBe(200);
+    expect(lineWins[0]).toMatchObject({ count: 5, amount: 400 });
+    expect(totalWin).toBe(400);
   });
 
   it('scales the payout by the per-line bet', () => {
     const grid: SymbolId[][] = [
-      ['cherry', 'seven', 'bar'],
-      ['lemon', 'seven', 'orange'],
-      ['bell', 'seven', 'plum'],
-      ['orange', 'cherry', 'bell'],
-      ['plum', 'lemon', 'cherry'],
+      ['ace', 'goldhorse', 'king'],
+      ['jack', 'goldhorse', 'queen'],
+      ['ten', 'goldhorse', 'cap'],
+      ['king', 'ace', 'jocky'],
+      ['queen', 'jack', 'redhorse'],
     ];
-    expect(evaluator.evaluate(grid, 5).totalWin).toBe(100); // 20 * 5
+    expect(evaluator.evaluate(grid, 5).totalWin).toBe(250); // 50 * 5
   });
 
   it('returns no win when nothing lines up', () => {
-    // reel 0 differs from reel 1 on every payline, so every line breaks at 1
     const grid: SymbolId[][] = [
-      ['cherry', 'lemon', 'orange'],
-      ['lemon', 'bar', 'plum'],
-      ['seven', 'bell', 'bar'],
-      ['bell', 'seven', 'cherry'],
-      ['bar', 'plum', 'seven'],
+      ['ace', 'redhorse', 'bluehorse'],
+      ['redhorse', 'jocky', 'cap'],
+      ['ten', 'king', 'jack'],
+      ['king', 'ten', 'queen'],
+      ['jack', 'queen', 'ace'],
     ];
     const { lineWins, totalWin } = evaluator.evaluate(grid, 1);
     expect(lineWins).toHaveLength(0);
@@ -78,11 +76,11 @@ describe('PaylineEvaluator', () => {
 
   it('does not pay a line made entirely of wilds', () => {
     const grid: SymbolId[][] = [
-      ['cherry', 'wild', 'bar'],
-      ['lemon', 'wild', 'cherry'],
-      ['orange', 'wild', 'lemon'],
-      ['plum', 'wild', 'orange'],
-      ['bell', 'wild', 'plum'],
+      ['ace', 'wild', 'king'],
+      ['jack', 'wild', 'queen'],
+      ['ten', 'wild', 'cap'],
+      ['king', 'wild', 'jocky'],
+      ['queen', 'wild', 'redhorse'],
     ];
     expect(evaluator.evaluate(grid, 1).lineWins).toHaveLength(0);
   });

@@ -1,6 +1,4 @@
 :root {
-  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
-  line-height: 1.5;
   color-scheme: dark;
 }
 
@@ -8,40 +6,34 @@
   box-sizing: border-box;
 }
 
+html,
 body {
   margin: 0;
-  min-height: 100vh;
+  height: 100%;
+}
+
+body {
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: #0d1322;
-  color: #d8def0;
+  background-color: #05070d;
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
 }
 
-.boot {
-  max-width: 560px;
-  padding: 2rem;
+#app {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.boot h1 {
-  font-size: 1.4rem;
-  font-weight: 650;
-  letter-spacing: -0.01em;
-  margin: 0 0 0.75rem;
-}
-
-.boot p {
-  color: #8893ad;
-  margin: 0 0 1rem;
-}
-
-.boot pre {
-  font-family: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
-  font-size: 0.85rem;
-  background: #151c2e;
-  border: 1px solid #2a3450;
-  border-radius: 10px;
-  padding: 14px 16px;
-  margin: 0;
-  color: #e6b45c;
+/* The canvas renders at native art resolution; scale it to fit the viewport
+   while preserving aspect ratio. */
+#app canvas {
+  display: block;
+  max-width: 100%;
+  max-height: 100vh;
+  width: auto;
+  height: auto;
 }
