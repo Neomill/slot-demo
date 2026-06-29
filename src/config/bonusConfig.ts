@@ -42,8 +42,8 @@ export const bonusConfig = {
   },
 
   holdAndRespin: {
-    /** Bonus symbols on the base board needed to trigger. */
-    trigger: { bonusSymbols: 6 },
+    /** Trophy symbols on the base board needed to trigger. */
+    trigger: { bonusSymbols: 5 },
     initialRespins: 3,
     /** Respins are reset to this whenever a new bonus symbol locks in. */
     resetRespins: 3,

@@ -7,38 +7,38 @@ export type ReelSetId = 'base' | 'freeSpins' | 'chance2x' | 'holdAndRespin';
  * A spin lands each reel on a random strip offset and reads `rows` consecutive
  * symbols (wrapping). Symbol frequency here is the only place odds live.
  *
- * - base:          normals + sparse scatter + sparse bonus, NO wild
- * - freeSpins:     normals + wild, no scatter/bonus
- * - chance2x:      base with denser scatter (more Free Spins triggers)
- * - holdAndRespin: filler normals + frequent bonus (respins land more bonus)
+ * - base:          royals + horses + sparse bonus (scatter) + sparse trophy, NO wild
+ * - freeSpins:     royals + horses + wild, no bonus/trophy
+ * - chance2x:      base with denser bonus → more Free Spins triggers
+ * - holdAndRespin: royal fillers + frequent trophy (respins land/lock trophies)
  */
 export const REEL_SETS: Record<ReelSetId, SymbolId[][]> = {
   base: [
-    ['cherry', 'lemon', 'scatter', 'bell', 'orange', 'bar', 'seven', 'lemon', 'bonus', 'cherry', 'plum', 'orange'],
-    ['lemon', 'orange', 'cherry', 'seven', 'scatter', 'plum', 'bell', 'cherry', 'bar', 'lemon', 'bonus', 'orange'],
-    ['orange', 'bell', 'cherry', 'lemon', 'bar', 'scatter', 'plum', 'orange', 'seven', 'cherry', 'lemon', 'bonus'],
-    ['plum', 'cherry', 'orange', 'bell', 'lemon', 'bar', 'scatter', 'cherry', 'orange', 'bonus', 'lemon', 'seven'],
-    ['bell', 'lemon', 'cherry', 'orange', 'plum', 'seven', 'bar', 'scatter', 'lemon', 'cherry', 'bonus', 'orange'],
+    ['goldhorse', 'ten', 'jack', 'bonus', 'queen', 'redhorse', 'king', 'ace', 'trophy', 'bluehorse', 'ten', 'jocky', 'cap', 'binoculars'],
+    ['ace', 'jocky', 'queen', 'bonus', 'ten', 'shoehorse', 'king', 'redhorse', 'trophy', 'jack', 'goldhorse', 'cap', 'ten', 'bluehorse'],
+    ['king', 'ten', 'redhorse', 'jack', 'bonus', 'queen', 'goldhorse', 'ace', 'shoehorse', 'trophy', 'jocky', 'ten', 'binoculars', 'cap'],
+    ['queen', 'bluehorse', 'ace', 'ten', 'trophy', 'jack', 'king', 'redhorse', 'cap', 'jocky', 'ten', 'goldhorse', 'shoehorse', 'bonus'],
+    ['jack', 'king', 'ten', 'goldhorse', 'ace', 'bonus', 'queen', 'bluehorse', 'trophy', 'jocky', 'cap', 'redhorse', 'binoculars', 'ace'],
   ],
   freeSpins: [
-    ['cherry', 'wild', 'lemon', 'bell', 'orange', 'bar', 'seven', 'wild', 'cherry', 'plum', 'orange', 'lemon'],
-    ['lemon', 'orange', 'wild', 'seven', 'cherry', 'plum', 'bell', 'wild', 'bar', 'lemon', 'orange', 'cherry'],
-    ['orange', 'bell', 'cherry', 'wild', 'bar', 'lemon', 'plum', 'orange', 'wild', 'cherry', 'seven', 'lemon'],
-    ['plum', 'cherry', 'orange', 'bell', 'wild', 'bar', 'lemon', 'cherry', 'orange', 'wild', 'lemon', 'seven'],
-    ['bell', 'lemon', 'wild', 'orange', 'plum', 'seven', 'bar', 'cherry', 'wild', 'lemon', 'cherry', 'orange'],
+    ['goldhorse', 'wild', 'ten', 'jack', 'queen', 'redhorse', 'king', 'wild', 'ace', 'bluehorse', 'ten', 'jocky', 'cap', 'binoculars'],
+    ['ace', 'jocky', 'wild', 'queen', 'ten', 'shoehorse', 'king', 'redhorse', 'jack', 'wild', 'goldhorse', 'cap', 'ten', 'bluehorse'],
+    ['king', 'ten', 'redhorse', 'wild', 'jack', 'queen', 'goldhorse', 'ace', 'shoehorse', 'wild', 'jocky', 'ten', 'binoculars', 'cap'],
+    ['queen', 'bluehorse', 'ace', 'ten', 'wild', 'jack', 'king', 'redhorse', 'cap', 'jocky', 'wild', 'goldhorse', 'shoehorse', 'queen'],
+    ['jack', 'king', 'wild', 'ten', 'goldhorse', 'ace', 'queen', 'bluehorse', 'wild', 'jocky', 'cap', 'redhorse', 'binoculars', 'ace'],
   ],
   chance2x: [
-    ['cherry', 'scatter', 'lemon', 'bell', 'scatter', 'bar', 'seven', 'scatter', 'bonus', 'cherry', 'plum', 'orange'],
-    ['scatter', 'orange', 'cherry', 'scatter', 'seven', 'plum', 'scatter', 'cherry', 'bar', 'lemon', 'bonus', 'orange'],
-    ['orange', 'scatter', 'bell', 'lemon', 'scatter', 'bar', 'plum', 'scatter', 'seven', 'cherry', 'lemon', 'bonus'],
-    ['scatter', 'cherry', 'orange', 'scatter', 'bell', 'lemon', 'scatter', 'cherry', 'orange', 'bonus', 'lemon', 'seven'],
-    ['bell', 'scatter', 'lemon', 'scatter', 'orange', 'plum', 'scatter', 'bar', 'lemon', 'cherry', 'bonus', 'scatter'],
+    ['goldhorse', 'bonus', 'ten', 'jack', 'bonus', 'queen', 'redhorse', 'bonus', 'king', 'trophy', 'bluehorse', 'jocky', 'cap', 'bonus'],
+    ['bonus', 'jocky', 'queen', 'bonus', 'ten', 'shoehorse', 'bonus', 'redhorse', 'trophy', 'jack', 'bonus', 'cap', 'ten', 'bluehorse'],
+    ['king', 'bonus', 'redhorse', 'bonus', 'jack', 'queen', 'bonus', 'goldhorse', 'shoehorse', 'trophy', 'bonus', 'ten', 'binoculars', 'cap'],
+    ['bonus', 'bluehorse', 'ace', 'bonus', 'ten', 'jack', 'bonus', 'king', 'cap', 'trophy', 'jocky', 'bonus', 'shoehorse', 'queen'],
+    ['bonus', 'king', 'ten', 'bonus', 'goldhorse', 'ace', 'bonus', 'queen', 'trophy', 'jocky', 'bonus', 'redhorse', 'binoculars', 'ace'],
   ],
   holdAndRespin: [
-    ['bonus', 'cherry', 'lemon', 'bell', 'bonus', 'orange', 'plum', 'bonus', 'lemon', 'cherry', 'bonus', 'seven'],
-    ['lemon', 'bonus', 'orange', 'cherry', 'bonus', 'plum', 'bell', 'bonus', 'bar', 'lemon', 'bonus', 'orange'],
-    ['bonus', 'orange', 'bell', 'bonus', 'lemon', 'bar', 'bonus', 'plum', 'orange', 'bonus', 'cherry', 'lemon'],
-    ['plum', 'bonus', 'orange', 'bell', 'bonus', 'lemon', 'bar', 'bonus', 'cherry', 'orange', 'bonus', 'seven'],
-    ['bell', 'lemon', 'bonus', 'orange', 'bonus', 'plum', 'seven', 'bonus', 'lemon', 'cherry', 'bonus', 'orange'],
+    ['trophy', 'ten', 'jack', 'trophy', 'queen', 'king', 'trophy', 'ace', 'ten', 'trophy', 'cap', 'jack', 'trophy', 'queen'],
+    ['ten', 'trophy', 'queen', 'king', 'trophy', 'ace', 'jack', 'trophy', 'ten', 'cap', 'trophy', 'king', 'ace', 'trophy'],
+    ['trophy', 'king', 'ten', 'trophy', 'jack', 'queen', 'trophy', 'ace', 'cap', 'trophy', 'ten', 'king', 'trophy', 'jack'],
+    ['queen', 'trophy', 'ace', 'ten', 'trophy', 'jack', 'king', 'trophy', 'cap', 'ten', 'trophy', 'queen', 'ace', 'trophy'],
+    ['jack', 'king', 'trophy', 'ten', 'trophy', 'ace', 'queen', 'trophy', 'ten', 'cap', 'trophy', 'king', 'trophy', 'ace'],
   ],
 };
