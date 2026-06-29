@@ -139,6 +139,23 @@ describe('Game — free spins', () => {
     expect(game.currentMode).toBe(GameMode.BASE);
   });
 
+  it('pays free-spin winnings only when the feature ends', async () => {
+    const game = new Game({
+      reelGenerator: reelStub({ freeSpins: JOCKY_WIN }),
+      startingBalance: 100000,
+      betPerLine: 1,
+    });
+    await game.init();
+    game.buyBonus('super'); // 10 free spins
+    const afterBuy = game.balance;
+    await game.spin(); // wins, but the win is not paid yet
+    expect(game.getState().freeSpins?.totalWin).toBeGreaterThan(0);
+    expect(game.balance).toBe(afterBuy); // balance unchanged mid-feature
+    for (let i = 0; i < 9; i++) await game.spin(); // finish the remaining spins
+    expect(game.currentMode).toBe(GameMode.BASE);
+    expect(game.balance).toBeGreaterThan(afterBuy); // paid in one lump at the end
+  });
+
   it('collecting 4 wilds steps the multiplier to x2 and awards +10 spins', async () => {
     const fsWild = withCells(blank(), [
       [0, 0, 'wild'],
@@ -190,6 +207,57 @@ describe('Game — hold & respin', () => {
     expect(game.getState().holdAndRespin?.remainingRespins).toBe(3);
     for (let i = 0; i < 3; i++) await game.spin();
     expect(game.currentMode).toBe(GameMode.BASE);
+  });
+
+  it('collects trophy values and ends when the board fills with trophies', async () => {
+    const trigger = withCells(blank(), [
+      [0, 0, 'trophy'],
+      [1, 0, 'trophy'],
+      [2, 0, 'trophy'],
+      [3, 0, 'trophy'],
+      [4, 0, 'trophy'],
+    ]);
+    const allTrophies = Array.from({ length: 5 }, () => ['trophy', 'trophy', 'trophy'] as SymbolId[]);
+    const game = new Game({
+      reelGenerator: reelStub({ base: trigger, holdAndRespin: allTrophies }),
+      rng: createSeededRng(1),
+      startingBalance: 1000,
+      betPerLine: 1,
+    });
+    await game.init();
+    await game.spin(); // trigger H&R (winnings accumulate, not yet paid)
+    expect(game.currentMode).toBe(GameMode.HOLD_AND_RESPIN);
+    const before = game.balance;
+    const result = await game.spin(); // fills the board -> ends and pays out
+    expect(result?.collectWin).toBeGreaterThan(0);
+    expect(game.currentMode).toBe(GameMode.BASE);
+    // The whole session total (every trophy) is paid in one lump when it ends.
+    const sessionTotal = result?.holdAndRespin?.totalWin ?? 0;
+    expect(sessionTotal).toBeGreaterThan(result?.collectWin ?? 0);
+    expect(game.balance).toBe(before + sessionTotal);
+  });
+
+  it('refills the respins to 3 on a winning respin, even with no new trophy', async () => {
+    const trigger = withCells(blank(), [
+      [0, 0, 'trophy'],
+      [1, 0, 'trophy'],
+      [2, 0, 'trophy'],
+      [3, 0, 'trophy'],
+      [4, 0, 'trophy'],
+    ]);
+    // The trophies lock row 0; JOCKY_WIN wins on the middle row with no trophy.
+    const game = new Game({
+      reelGenerator: reelStub({ base: trigger, holdAndRespin: JOCKY_WIN }),
+      startingBalance: 1000,
+      betPerLine: 1,
+    });
+    await game.init();
+    await game.spin(); // trigger -> 3 respins
+    expect(game.getState().holdAndRespin?.remainingRespins).toBe(3);
+    const result = await game.spin(); // winning respin, no new trophy
+    expect(result?.totalWin).toBeGreaterThan(0);
+    expect(result?.bonusCount).toBe(5); // no new trophy locked
+    expect(game.getState().holdAndRespin?.remainingRespins).toBe(3); // refilled, not 2
   });
 });
 

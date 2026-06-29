@@ -157,12 +157,12 @@ export const FREE_SPIN_PANEL = (() => {
 
 /** Idle (dull) vs. lit (full-colour) look for the side panels. */
 export const SIDE_PANEL_LOOK = {
-  dullSaturate: -0.2, // ColorMatrix saturate amount when idle (0 = unchanged)
+  dullSaturate: -0.4, // ColorMatrix saturate amount when idle (0 = unchanged)
   dullBrightness: 0.9, // brightness multiplier when idle (1 = unchanged)
   hoverScale: 1,
   pressScale: 1,
   glowColor: 0xffe08a,
-  glowAlpha: 0.3,
+  glowAlpha: 0.5,
   /** ms to ease between dull and lit. */
   fadeMs: 140,
 } as const;

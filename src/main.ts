@@ -17,6 +17,10 @@ void scene.init(container);
 //   await game.spin()        · base spin
 //   game.setChance2x(true)   · then spin for denser scatters at 2x cost
 //   game.buyBonus('mega')    · then loop: await game.spin()  (free spins)
-// Trigger Hold & Respin by landing 5 trophies on a base spin.
+//   game.debugTriggerHoldAndRespin()  · jump straight into Hold & Respin
+// (Or trigger Hold & Respin naturally by landing 5 trophies on a base spin.)
 (window as unknown as { game: Game }).game = game;
-console.info("%cSlot ready — try game.spin()", "color:#5ec98a");
+console.info(
+  "%cSlot ready — try game.spin() or game.debugTriggerHoldAndRespin()",
+  "color:#5ec98a",
+);

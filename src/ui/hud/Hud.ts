@@ -34,6 +34,11 @@ export class Hud extends Container {
   private winShown = 0;
   private winTarget = 0;
 
+  // BALANCE eases toward its target in both directions — up when it's credited,
+  // down when a bet is placed (driven by update()).
+  private balanceShown = 0;
+  private balanceTarget = 0;
+
   constructor(callbacks: HudCallbacks) {
     super();
 
@@ -67,16 +72,27 @@ export class Hud extends Container {
     this.addChild(panel, this.menu, this.balance, divider, this.bet, this.win, this.turbo, this.spin);
   }
 
-  /** Advance the WIN count-up. Call once per frame with the frame delta (ms). */
+  /** Advance the WIN and BALANCE counters. Call once per frame with the delta (ms). */
   update(dtMs: number): void {
-    if (this.winShown === this.winTarget) return;
-    this.winShown += (this.winTarget - this.winShown) * Math.min(1, dtMs / 220);
-    if (Math.abs(this.winTarget - this.winShown) < 0.5) this.winShown = this.winTarget;
-    this.win.setValue(money(this.winShown));
+    if (this.winShown !== this.winTarget) {
+      this.winShown += (this.winTarget - this.winShown) * Math.min(1, dtMs / 220);
+      if (Math.abs(this.winTarget - this.winShown) < 0.5) this.winShown = this.winTarget;
+      this.win.setValue(money(this.winShown));
+    }
+    if (this.balanceShown !== this.balanceTarget) {
+      this.balanceShown += (this.balanceTarget - this.balanceShown) * Math.min(1, dtMs / 220);
+      if (Math.abs(this.balanceTarget - this.balanceShown) < 0.5) this.balanceShown = this.balanceTarget;
+      this.balance.setValue(money(this.balanceShown));
+    }
   }
 
-  setBalance(value: number): void {
-    this.balance.setValue(money(value));
+  /** Set the BALANCE target; it eases there. `snap` jumps instantly (e.g. on init). */
+  setBalance(value: number, snap = false): void {
+    this.balanceTarget = value;
+    if (snap) {
+      this.balanceShown = value;
+      this.balance.setValue(money(value));
+    }
   }
 
   setBet(value: number): void {
@@ -90,6 +106,11 @@ export class Hud extends Container {
       this.winShown = value;
       this.win.setValue(money(value));
     }
+  }
+
+  /** Set the WIN caption ("WIN" in base, "TOTAL WIN" during a bonus). */
+  setWinLabel(text: string): void {
+    this.win.setCaption(text);
   }
 
   setTurbo(active: boolean): void {

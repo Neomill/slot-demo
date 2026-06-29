@@ -14,7 +14,8 @@ import { HoldAndRespinManager } from '../bonus/HoldAndRespinManager';
 import { BuyBonusManager } from '../bonus/BuyBonusManager';
 import { PAYLINES } from '../config/paylines';
 import { PAYTABLE } from '../config/paytable';
-import { WILD } from '../config/symbols';
+import { WILD, BONUS } from '../config/symbols';
+import type { SymbolId } from '../config/symbols';
 import { gameConfig } from '../config/gameConfig';
 import { bonusConfig, type BuyBonusTier } from '../config/bonusConfig';
 import { GameEvent, type GameEventMap } from '../types/events';
@@ -70,7 +71,7 @@ export class Game {
     this.prizes = new PrizeEvaluator(rng, PAYLINES);
     this.bonus = new BonusManager();
     this.freeSpins = new FreeSpinManager();
-    this.holdAndRespin = new HoldAndRespinManager();
+    this.holdAndRespin = new HoldAndRespinManager(rng);
     this.buyBonusManager = new BuyBonusManager();
     this._betPerLine = options.betPerLine ?? gameConfig.defaultBetPerLine;
   }
@@ -171,6 +172,74 @@ export class Game {
     this.events.emit(GameEvent.FreeSpinsStart, { spins, trigger: 'buy' });
   }
 
+  /**
+   * Debug helper: force a Hold & Respin trigger from idle in the base game.
+   * Drops the trigger's worth of trophies onto a real base board (one per reel)
+   * and enters the feature exactly as a natural triggering spin would, so the
+   * UI auto-plays the respins. Console: `game.debugTriggerHoldAndRespin()`.
+   */
+  debugTriggerHoldAndRespin(): SpinResult | null {
+    if (this.state.current !== GameState.IDLE || this.mode !== GameMode.BASE) {
+      this.events.emit(GameEvent.SpinRejected, { reason: 'busy' });
+      return null;
+    }
+
+    this.state.set(GameState.SPINNING);
+    this.events.emit(GameEvent.SpinStart, { betPerLine: this._betPerLine, stake: 0 });
+
+    const grid = this.reels.generate('base');
+    const needed = bonusConfig.holdAndRespin.trigger.bonusSymbols;
+    for (let reel = 0; reel < needed && reel < grid.length; reel++) {
+      grid[reel][0] = BONUS;
+    }
+
+    const { lineWins, totalWin: baseWin } = this.evaluator.evaluate(grid, this._betPerLine);
+    this.state.set(GameState.EVALUATING);
+    if (baseWin > 0) this.wallet.credit(baseWin, 'win');
+
+    const bonusCount = this.bonus.countBonus(grid);
+    const result: SpinResult = {
+      grid,
+      lineWins,
+      prizes: this.prizes.roll(grid),
+      baseWin,
+      totalWin: baseWin,
+      multiplier: 1,
+      mode: GameMode.BASE,
+      scatterCount: this.bonus.countScatters(grid),
+      bonusCount,
+    };
+
+    this.startHoldAndRespin(grid, result);
+
+    this.emitSettled(result);
+    this.state.set(GameState.IDLE);
+    return result;
+  }
+
+  /**
+   * Enter Hold & Respin from a triggering board: lock + value the trophies,
+   * collect those starting values right away (so the win meter shows them as the
+   * trophies land), snapshot onto `result`, and switch mode.
+   */
+  private startHoldAndRespin(grid: SymbolId[][], result: SpinResult): void {
+    this.holdAndRespin.start(grid);
+    const trophyWin = this.holdAndRespin.trophyTotal() * this._betPerLine;
+    if (trophyWin > 0) {
+      // Accumulate into the session total (shown live); paid when the feature ends.
+      this.holdAndRespin.addWin(trophyWin);
+      result.collectWin = (result.collectWin ?? 0) + trophyWin;
+    }
+    // Carry the freshly-rolled trophy values so the triggering spin shows each
+    // trophy's value as it lands (not popped on once the feature begins).
+    result.holdAndRespin = this.holdAndRespin.snapshot();
+    this.enterMode(GameMode.HOLD_AND_RESPIN);
+    this.events.emit(GameEvent.HoldRespinStart, {
+      respins: this.holdAndRespin.remaining,
+      lockedBonus: this.bonus.countBonus(grid),
+    });
+  }
+
   /** The single entry point — branches on the current mode. */
   async spin(): Promise<SpinResult | null> {
     if (this.state.current !== GameState.IDLE) {
@@ -234,12 +303,7 @@ export class Game {
       this.enterMode(GameMode.FREE_SPINS);
       this.events.emit(GameEvent.FreeSpinsStart, { spins: scatterAward, trigger: 'scatter' });
     } else if (this.bonus.triggersHoldAndRespin(bonusCount)) {
-      this.holdAndRespin.start(grid);
-      this.enterMode(GameMode.HOLD_AND_RESPIN);
-      this.events.emit(GameEvent.HoldRespinStart, {
-        respins: this.holdAndRespin.remaining,
-        lockedBonus: bonusCount,
-      });
+      this.startHoldAndRespin(grid, result);
     }
 
     this.emitSettled(result);
@@ -273,7 +337,7 @@ export class Game {
     const win = baseWin * multiplier;
 
     this.state.set(GameState.EVALUATING);
-    if (win > 0) this.wallet.credit(win, 'win');
+    // Wins accumulate during the feature; the whole total is paid when it ends.
     this.freeSpins.addWin(win);
     this.freeSpins.consume();
 
@@ -294,7 +358,9 @@ export class Game {
     this.emitSettled(result);
 
     if (!this.freeSpins.isActive) {
-      this.events.emit(GameEvent.FreeSpinsEnd, { totalWin: this.freeSpins.snapshot().totalWin });
+      const total = this.freeSpins.snapshot().totalWin;
+      if (total > 0) this.wallet.credit(total, 'win'); // pay the whole session, once
+      this.events.emit(GameEvent.FreeSpinsEnd, { totalWin: total });
       this.freeSpins.reset();
       this.enterMode(GameMode.BASE);
     }
@@ -308,25 +374,33 @@ export class Game {
     this.events.emit(GameEvent.SpinStart, { betPerLine: this._betPerLine, stake: 0 });
 
     const candidate = this.reels.generate('holdAndRespin');
-    const { newBonus } = this.holdAndRespin.respin(candidate);
+    const { newBonus, newTrophyValue } = this.holdAndRespin.respin(candidate);
     const grid = this.holdAndRespin.currentBoard;
 
     const { lineWins, totalWin: baseWin } = this.evaluator.evaluate(grid, this._betPerLine);
 
     this.state.set(GameState.EVALUATING);
-    if (baseWin > 0) this.wallet.credit(baseWin, 'win');
-    this.holdAndRespin.addWin(baseWin);
+    if (baseWin > 0) {
+      // A win refills the respins to the reset value, regardless of trophy count.
+      this.holdAndRespin.refill();
+    }
+    // Each trophy's value joins the running total as it lands; line wins too. The
+    // total is shown live but only paid to the balance when the feature ends.
+    const collectWin = newTrophyValue * this._betPerLine;
+    const spinWin = baseWin + collectWin;
+    this.holdAndRespin.addWin(spinWin);
 
     const result: SpinResult = {
       grid: grid.map((column) => [...column]),
       lineWins,
       prizes: this.prizes.roll(grid),
       baseWin,
-      totalWin: baseWin,
+      totalWin: spinWin,
       multiplier: 1,
       mode: GameMode.HOLD_AND_RESPIN,
       scatterCount: 0,
       bonusCount: this.bonus.countBonus(grid),
+      collectWin: collectWin || undefined,
       holdAndRespin: this.holdAndRespin.snapshot(),
     };
 
@@ -337,8 +411,12 @@ export class Game {
     });
     this.emitSettled(result);
 
+    // Ends when the respins run out or the whole board is trophies; the whole
+    // accumulated total (line wins + every trophy) is paid to the balance now.
     if (!this.holdAndRespin.isActive) {
-      this.events.emit(GameEvent.HoldRespinEnd, { totalWin: this.holdAndRespin.snapshot().totalWin });
+      const total = this.holdAndRespin.snapshot().totalWin;
+      if (total > 0) this.wallet.credit(total, 'win');
+      this.events.emit(GameEvent.HoldRespinEnd, { totalWin: total });
       this.holdAndRespin.reset();
       this.enterMode(GameMode.BASE);
     }

@@ -47,6 +47,12 @@ export const bonusConfig = {
     initialRespins: 3,
     /** Respins are reset to this whenever a new bonus symbol locks in. */
     resetRespins: 3,
+    /**
+     * Each locked trophy carries a random value from this set (a multiplier of
+     * the per-line bet, like the Prize symbols). All values are collected when
+     * the feature ends.
+     */
+    values: [2, 5, 10, 20, 50],
   },
 
   chance2x: {

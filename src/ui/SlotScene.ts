@@ -12,9 +12,9 @@ import { GameState } from "../core/GameState";
 import { GameEvent } from "../types/events";
 import { gameConfig } from "../config/gameConfig";
 import { bonusConfig, type BuyBonusTier } from "../config/bonusConfig";
-import { WILD } from "../config/symbols";
+import { WILD, BONUS } from "../config/symbols";
 import type { SymbolId } from "../config/symbols";
-import type { Position, SpinResult } from "../types/slot";
+import type { Position, PrizeCell, SpinResult } from "../types/slot";
 import {
   BACKGROUNDS,
   FRAME as FRAME_TEXTURE,
@@ -34,6 +34,7 @@ import { Reels } from "./Reels";
 import { Hud } from "./hud";
 import { SidePanel } from "./SidePanel";
 import { FreeSpinPanel } from "./FreeSpinPanel";
+import { HoldRespinPanel } from "./HoldRespinPanel";
 import { money } from "./hud/text";
 
 // Pleasant resting board shown before the first spin.
@@ -55,6 +56,26 @@ function wildPositions(grid: SymbolId[][]): Position[] {
     }
   }
   return positions;
+}
+
+/** Locked trophies as Prize cells, so the reels can bake their value badges. */
+function trophyValueCells(locked: boolean[][], values: number[][]): PrizeCell[] {
+  const cells: PrizeCell[] = [];
+  for (let reel = 0; reel < values.length; reel++) {
+    for (let row = 0; row < values[reel].length; row++) {
+      if (locked[reel]?.[row] && values[reel][row] > 0) {
+        cells.push({ reel, row, symbol: BONUS, value: values[reel][row] });
+      }
+    }
+  }
+  return cells;
+}
+
+/** The win to show on the HUD: the running session total in a bonus, else this spin's. */
+function sessionWin(result: SpinResult): number {
+  if (result.freeSpins) return result.freeSpins.totalWin;
+  if (result.holdAndRespin) return result.holdAndRespin.totalWin;
+  return result.totalWin;
 }
 
 /** Pause between auto-played bonus spins (free spins / hold & respin). */
@@ -91,6 +112,7 @@ export class SlotScene {
   private hud!: Hud;
   private sidePanel!: SidePanel;
   private freeSpinPanel!: FreeSpinPanel;
+  private holdRespinPanel!: HoldRespinPanel;
   private autoTimer: number | null = null;
   private busy = false; // true while a spin animation is playing
 
@@ -174,9 +196,10 @@ export class SlotScene {
     });
 
     this.freeSpinPanel = new FreeSpinPanel();
+    this.holdRespinPanel = new HoldRespinPanel();
 
-    // background → backdrop → reels → frame → logo → side panels → free-spin
-    // overlay → HUD
+    // background → backdrop → reels → frame → logo → side panels → bonus
+    // overlays → HUD
     stage.addChild(
       this.background,
       this.backdrop,
@@ -185,6 +208,7 @@ export class SlotScene {
       logo,
       this.sidePanel,
       this.freeSpinPanel,
+      this.holdRespinPanel,
       this.hud,
     );
   }
@@ -196,11 +220,23 @@ export class SlotScene {
       this.setBackground(to);
       this.refreshControls(); // entering/leaving a bonus mode flips the spin button immediately
       this.refreshFreeSpinOverlay();
+      // Bonus modes show a running session total; the base game shows one spin.
+      this.hud.setWinLabel(to === GameMode.BASE ? "WIN" : "TOTAL WIN");
+      // Seed the meter with the session total so far (0 for free spins; the
+      // starting trophies' value for hold & respin) so it climbs as wins land.
+      const s = this.game.getState();
+      if (to === GameMode.FREE_SPINS) this.hud.setWin(s.freeSpins?.totalWin ?? 0);
+      else if (to === GameMode.HOLD_AND_RESPIN) this.hud.setWin(s.holdAndRespin?.totalWin ?? 0);
     });
     events.on(GameEvent.SpinResult, ({ result }) => void this.render(result));
-    events.on(GameEvent.SpinStart, () => this.hud.setWin(0));
-    events.on(GameEvent.BalanceChange, ({ balance }) => {
-      this.hud.setBalance(balance);
+    // Reset the win meter per spin only in the base game; bonus modes keep the
+    // accumulated session total (render() drives it up).
+    events.on(GameEvent.SpinStart, () => {
+      if (this.game.currentMode === GameMode.BASE) this.hud.setWin(0);
+    });
+    events.on(GameEvent.BalanceChange, ({ balance, reason }) => {
+      // Snap on the initial load; otherwise ease (count up on a win, down on a bet).
+      this.hud.setBalance(balance, reason === "init");
       this.refreshControls();
     });
     events.on(GameEvent.BetChange, ({ stake }) => {
@@ -230,10 +266,20 @@ export class SlotScene {
     this.reels.clearWins();
 
     if (result.mode === GameMode.HOLD_AND_RESPIN && result.holdAndRespin) {
-      this.reels.showLocked(result.grid, result.holdAndRespin.locked);
+      const { lockedBefore, locked, values } = result.holdAndRespin;
+      const trophyPrizes = trophyValueCells(locked, values);
+      this.holdRespinPanel.tickDown(); // deduct one respin as the reels start
+      await this.reels.respin(result.grid, lockedBefore, locked, trophyPrizes, this.game.betPerLine);
+      // Reels (and any new trophy) have landed — sync to the engine's count, which
+      // refills to 3 when a trophy or win landed this respin.
+      this.holdRespinPanel.setRemaining(result.holdAndRespin.remainingRespins);
     } else {
-      // Prize values are baked into the landing tiles, so they scroll in with the reel.
-      await this.reels.spin(result.grid, result.prizes, this.game.betPerLine);
+      // Prize values are baked into the landing tiles, so they scroll in with the
+      // reel. On the Hold & Respin trigger spin the trophies carry their values too.
+      const prizes = result.holdAndRespin
+        ? [...result.prizes, ...trophyValueCells(result.holdAndRespin.locked, result.holdAndRespin.values)]
+        : result.prizes;
+      await this.reels.spin(result.grid, prizes, this.game.betPerLine);
     }
 
     // Spin Results: animate the winning paylines.
@@ -250,7 +296,9 @@ export class SlotScene {
       );
     }
 
-    this.hud.setWin(result.totalWin);
+    // Base mode shows this spin's win; bonus modes show the running total of the
+    // session (so it accumulates and never resets mid-feature).
+    this.hud.setWin(sessionWin(result));
     this.busy = false;
     this.refreshControls();
     this.refreshFreeSpinOverlay();
@@ -316,11 +364,21 @@ export class SlotScene {
   private refreshFreeSpinOverlay(): void {
     const s = this.game.getState();
     const inFreeSpins = s.mode === GameMode.FREE_SPINS && !!s.freeSpins;
+    const inHoldRespin = s.mode === GameMode.HOLD_AND_RESPIN && !!s.holdAndRespin;
 
     this.freeSpinPanel.visible = inFreeSpins;
     if (s.freeSpins) {
       this.freeSpinPanel.setRemaining(s.freeSpins.remaining);
       this.freeSpinPanel.setWildCounter(s.freeSpins.wildCounter);
+    }
+
+    // The respin count is updated by render() once the reels land (so a landing
+    // trophy resets it to 3 only after it visually arrives). Here we just set the
+    // starting value as the panel first appears.
+    const enteringHoldRespin = inHoldRespin && !this.holdRespinPanel.visible;
+    this.holdRespinPanel.visible = inHoldRespin;
+    if (enteringHoldRespin && s.holdAndRespin) {
+      this.holdRespinPanel.setRemaining(s.holdAndRespin.remainingRespins);
     }
   }
 }

@@ -80,6 +80,20 @@ interface Glow {
   duration: number;
 }
 
+/** One unlocked cell mid-respin: a single-cell strip scrolling to its target. */
+interface CellSpin {
+  reel: number;
+  row: number;
+  container: Container;
+  strip: Container;
+  elapsed: number;
+  duration: number;
+  fromY: number;
+  arrived: boolean;
+  /** This cell rolled a trophy — outline it the moment it lands. */
+  locksOnLand: boolean;
+}
+
 /** One reel column: a vertical strip of symbols, masked to the visible rows. */
 class ReelColumn extends Container {
   private readonly strip = new Container();
@@ -93,6 +107,8 @@ class ReelColumn extends Container {
   private prizeByRow = new Map<number, string>();
   /** Row -> the badge node currently shown, so collect can detach it. */
   private prizeBadges = new Map<number, Container>();
+  /** Row -> the landed tile, so Hold & Respin can hide a cell while it respins. */
+  private tilesByRow = new Map<number, Container>();
 
   constructor(initial: SymbolId[]) {
     super();
@@ -146,15 +162,23 @@ class ReelColumn extends Container {
     if (badge) badge.visible = false;
   }
 
+  /** Hold & Respin: hide/show a landed cell while a respin spinner plays over it. */
+  setRowVisible(row: number, visible: boolean): void {
+    const tile = this.tilesByRow.get(row);
+    if (tile) tile.visible = visible;
+  }
+
   private build(symbols: SymbolId[]): void {
     this.strip.removeChildren();
     this.prizeBadges.clear();
+    this.tilesByRow.clear();
     symbols.forEach((id, i) => {
       const { tile, badge } = makeSymbolTile(id, this.prizeByRow.get(i));
       tile.x = CELL.width / 2;
       tile.y = i * CELL.height + CELL.height / 2;
       this.strip.addChild(tile);
       if (badge) this.prizeBadges.set(i, badge);
+      if (i < ROWS) this.tilesByRow.set(i, tile);
     });
   }
 }
@@ -162,17 +186,22 @@ class ReelColumn extends Container {
 /** The full reel set: columns + layers for lock/win highlights and collect FX. */
 export class Reels extends Container {
   private readonly columns: ReelColumn[] = [];
+  private readonly respinLayer = new Container();
   private readonly highlights = new Container();
   private readonly winLayer = new Container();
   private readonly fxLayer = new Container();
   private winPulse = 0;
   private flying: FlyingBadge[] = [];
   private glows: Glow[] = [];
+  private respins: CellSpin[] = [];
+  private respinResolve?: () => void;
   private collectResolve?: () => void;
   private collectPrizes: PrizeCell[] = [];
   private collectWilds: Position[] = [];
   private collectBet = 1;
   private collectPassIndex = 0;
+  /** The board currently on screen, so a respin can scroll out of the right symbol. */
+  private displayed: SymbolId[][] = [];
 
   constructor(initialGrid: SymbolId[][]) {
     super();
@@ -182,8 +211,9 @@ export class Reels extends Container {
       this.addChild(column);
       this.columns.push(column);
     }
+    this.displayed = initialGrid.map((column) => [...column]);
     this.drawSeparators();
-    this.addChild(this.highlights, this.winLayer, this.fxLayer);
+    this.addChild(this.respinLayer, this.highlights, this.winLayer, this.fxLayer);
   }
 
   update(dtMs: number): void {
@@ -194,6 +224,7 @@ export class Reels extends Container {
       this.winLayer.alpha = 0.55 + 0.45 * (Math.sin(this.winPulse / 220) * 0.5 + 0.5);
     }
 
+    this.updateRespins(dtMs);
     this.updateFlying(dtMs);
     this.updateGlows(dtMs);
   }
@@ -205,6 +236,7 @@ export class Reels extends Container {
     this.clearCollectFx();
     const byColumn = this.prizeMaps(prizes, betPerLine);
     grid.forEach((column, i) => this.columns[i]?.set(column, byColumn[i]));
+    this.displayed = grid.map((column) => [...column]);
   }
 
   /** Animated spin: reels scroll and land staggered, prize values baked into the tiles. */
@@ -212,7 +244,9 @@ export class Reels extends Container {
     this.highlights.removeChildren();
     this.clearWins();
     this.clearCollectFx();
+    this.clearRespins();
     const byColumn = this.prizeMaps(prizes, betPerLine);
+    this.displayed = grid.map((column) => [...column]);
     return Promise.all(
       this.columns.map((column, i) =>
         column.spinTo(grid[i] ?? [], SPIN.baseMs + i * SPIN.staggerMs, byColumn[i]),
@@ -222,16 +256,146 @@ export class Reels extends Container {
 
   /** Hold & Respin: snap to the board and outline the locked cells. */
   showLocked(grid: SymbolId[][], locked: boolean[][]): void {
+    this.clearRespins();
     this.setGrid(grid);
-    for (let reel = 0; reel < locked.length; reel++) {
-      for (let row = 0; row < locked[reel].length; row++) {
-        if (!locked[reel][row]) continue;
-        const marker = new Graphics()
-          .rect(reel * CELL.width, row * CELL.height, CELL.width, CELL.height)
-          .stroke({ color: colors.lock, width: 5 });
-        this.highlights.addChild(marker);
+    this.outlineLocked(locked);
+  }
+
+  /**
+   * Hold & Respin: spin every cell that wasn't already locked, landing it on
+   * whatever it rolled — a trophy lands naturally like any other symbol, and
+   * only gets outlined once it arrives. Cells locked before the respin hold in
+   * place. Resolves once every spinning cell has landed.
+   *
+   * @param heldBefore  cells locked before this respin (stay put, outlined now)
+   * @param lockedAfter cells locked after — a `true` not in `heldBefore` is a
+   *                    trophy that just landed and gets outlined on arrival.
+   */
+  respin(
+    grid: SymbolId[][],
+    heldBefore: boolean[][],
+    lockedAfter: boolean[][],
+    prizes: PrizeCell[] = [],
+    betPerLine = 1,
+  ): Promise<void> {
+    this.clearRespins();
+    const onScreen = this.displayed; // symbols currently shown — capture before setGrid
+    // Bake trophy value badges onto the (final) board; spinners cover moving cells.
+    this.setGrid(grid, prizes, betPerLine);
+    const badges = this.prizeMaps(prizes, betPerLine); // reel -> row -> value text
+
+    for (let reel = 0; reel < grid.length; reel++) {
+      for (let row = 0; row < (grid[reel]?.length ?? 0); row++) {
+        if (heldBefore[reel]?.[row]) {
+          this.addLockMarker(reel, row); // already-locked trophy: hold and outline
+          continue;
+        }
+        const locksOnLand = lockedAfter[reel]?.[row] === true;
+        const current = onScreen[reel]?.[row] ?? grid[reel][row];
+        // A landing trophy carries its value badge as it scrolls in (not popped on).
+        const badgeText = badges[reel]?.get(row);
+        this.respins.push(
+          this.spinCell(reel, row, grid[reel][row], current, reel * SPIN.staggerMs, locksOnLand, badgeText),
+        );
       }
     }
+
+    if (this.respins.length === 0) return Promise.resolve();
+    return new Promise((resolve) => (this.respinResolve = resolve));
+  }
+
+  private outlineLocked(locked: boolean[][]): void {
+    for (let reel = 0; reel < locked.length; reel++) {
+      for (let row = 0; row < locked[reel].length; row++) {
+        if (locked[reel][row]) this.addLockMarker(reel, row);
+      }
+    }
+  }
+
+  private addLockMarker(reel: number, row: number): void {
+    const marker = new Graphics()
+      .rect(reel * CELL.width, row * CELL.height, CELL.width, CELL.height)
+      .stroke({ color: colors.lock, width: 5 });
+    this.highlights.addChild(marker);
+  }
+
+  /** Build a single-cell scroller that starts on `current` and lands on `target`. */
+  private spinCell(
+    reel: number,
+    row: number,
+    target: SymbolId,
+    current: SymbolId,
+    delayMs: number,
+    locksOnLand: boolean,
+    badgeText?: string,
+  ): CellSpin {
+    const container = new Container();
+    container.x = reel * CELL.width;
+    container.y = row * CELL.height;
+    const mask = new Graphics().rect(0, 0, CELL.width, CELL.height).fill(0xffffff);
+    const strip = new Container();
+    container.addChild(strip, mask);
+    container.mask = mask;
+
+    // Top -> bottom: [target, fillers..., current]. The strip starts shifted up so
+    // `current` (the symbol already on screen) shows first, then scrolls down past
+    // the fillers and settles on `target` — a continuous spin, no symbol jump. The
+    // target carries its value badge (if any) so it arrives with the value on it.
+    const ids: SymbolId[] = [target];
+    for (let i = 0; i < FILLERS; i++) ids.push(randomSymbol());
+    ids.push(current);
+    ids.forEach((id, i) => {
+      const tile = i === 0 && badgeText ? makeSymbolTile(id, badgeText).tile : makeSymbolSprite(id);
+      tile.x = CELL.width / 2;
+      tile.y = i * CELL.height + CELL.height / 2;
+      strip.addChild(tile);
+    });
+
+    const fromY = -(ids.length - 1) * CELL.height; // bottom tile (current) in view
+    strip.y = fromY;
+    this.respinLayer.addChild(container);
+    this.columns[reel]?.setRowVisible(row, false);
+    return { reel, row, container, strip, elapsed: -delayMs, duration: SPIN.baseMs, fromY, arrived: false, locksOnLand };
+  }
+
+  private updateRespins(dtMs: number): void {
+    if (this.respins.length === 0) return;
+    let allArrived = true;
+    for (const cell of this.respins) {
+      if (cell.arrived) continue;
+      cell.elapsed += dtMs;
+      if (cell.elapsed < 0) {
+        allArrived = false; // still in its stagger delay
+        continue;
+      }
+      const t = Math.min(1, cell.elapsed / cell.duration);
+      cell.strip.y = cell.fromY * (1 - easeOutCubic(t));
+      if (t >= 1) {
+        cell.arrived = true;
+        this.columns[cell.reel]?.setRowVisible(cell.row, true);
+        this.respinLayer.removeChild(cell.container);
+        if (cell.locksOnLand) this.addLockMarker(cell.reel, cell.row); // trophy just landed
+      } else {
+        allArrived = false;
+      }
+    }
+    if (allArrived) {
+      this.respins = [];
+      const done = this.respinResolve;
+      this.respinResolve = undefined;
+      done?.();
+    }
+  }
+
+  /** Tear down any in-flight respin spinners (called before a new board lands). */
+  clearRespins(): void {
+    for (const cell of this.respins) {
+      this.columns[cell.reel]?.setRowVisible(cell.row, true);
+      this.respinLayer.removeChild(cell.container);
+    }
+    this.respins = [];
+    this.respinResolve?.();
+    this.respinResolve = undefined;
   }
 
   /** Outline + pulse the winning cells (Spin Results: "the winning payline is animated"). */

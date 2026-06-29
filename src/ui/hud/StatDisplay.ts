@@ -10,6 +10,7 @@ import { fitWidth } from './text';
  */
 export class StatDisplay extends Container {
   private readonly value: Text;
+  private readonly captionText: Text;
   private readonly slotWidth: number;
 
   constructor(caption: string, slotWidth: number, valueColor?: number) {
@@ -19,6 +20,7 @@ export class StatDisplay extends Container {
     const label = new Text({ text: caption, style: labelStyle() });
     label.anchor.set(0.5);
     label.y = TEXT_DY.label;
+    this.captionText = label;
 
     this.value = new Text({ text: '0.00', style: valueStyle(valueColor) });
     this.value.anchor.set(0.5);
@@ -30,5 +32,11 @@ export class StatDisplay extends Container {
   setValue(text: string): void {
     this.value.text = text;
     fitWidth(this.value, this.slotWidth);
+  }
+
+  /** Change the caption above the value (e.g. WIN -> TOTAL WIN in a bonus). */
+  setCaption(text: string): void {
+    this.captionText.text = text;
+    fitWidth(this.captionText, this.slotWidth);
   }
 }
