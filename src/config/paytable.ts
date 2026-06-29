@@ -6,15 +6,12 @@ export type PayoutTiers = Record<number, number>;
 export type PayTable = Partial<Record<SymbolId, PayoutTiers>>;
 
 /**
- * Per-line payout multipliers. Horses pay high, card royals pay low. The
- * specials (wild / bonus / trophy) are intentionally absent — they trigger
- * features rather than paying lines.
+ * Per-line payout multipliers. The horses (blue/red/gold) are NOT here — they
+ * are Prize symbols that pay by their own rolled value (see prizeConfig). The
+ * specials (wild / bonus / trophy) are also absent — they trigger features.
  */
 export const PAYTABLE: PayTable = {
-  // high — themed
-  goldhorse: { 3: 50, 4: 120, 5: 400 },
-  redhorse: { 3: 25, 4: 60, 5: 200 },
-  bluehorse: { 3: 20, 4: 50, 5: 150 },
+  // high
   jocky: { 3: 15, 4: 40, 5: 120 },
   // mid
   shoehorse: { 3: 10, 4: 25, 5: 80 },

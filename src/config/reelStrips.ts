@@ -21,7 +21,8 @@ export const REEL_SETS: Record<ReelSetId, SymbolId[][]> = {
     ['jack', 'king', 'ten', 'goldhorse', 'ace', 'bonus', 'queen', 'bluehorse', 'trophy', 'jocky', 'cap', 'redhorse', 'binoculars', 'ace'],
   ],
   freeSpins: [
-    ['goldhorse', 'wild', 'ten', 'jack', 'queen', 'redhorse', 'king', 'wild', 'ace', 'bluehorse', 'ten', 'jocky', 'cap', 'binoculars'],
+    // Reel 1 carries no Prize symbols (prizes appear on reels 2-5).
+    ['jocky', 'wild', 'ten', 'jack', 'queen', 'shoehorse', 'king', 'wild', 'ace', 'cap', 'ten', 'jocky', 'cap', 'binoculars'],
     ['ace', 'jocky', 'wild', 'queen', 'ten', 'shoehorse', 'king', 'redhorse', 'jack', 'wild', 'goldhorse', 'cap', 'ten', 'bluehorse'],
     ['king', 'ten', 'redhorse', 'wild', 'jack', 'queen', 'goldhorse', 'ace', 'shoehorse', 'wild', 'jocky', 'ten', 'binoculars', 'cap'],
     ['queen', 'bluehorse', 'ace', 'ten', 'wild', 'jack', 'king', 'redhorse', 'cap', 'jocky', 'wild', 'goldhorse', 'shoehorse', 'queen'],

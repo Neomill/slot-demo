@@ -15,12 +15,24 @@ export interface LineWin {
   count: number;
   positions: Position[];
   amount: number;
+  /** 'line' = normal paytable win; 'prize' = summed Prize-symbol values. */
+  kind: 'line' | 'prize';
+}
+
+/** A Prize symbol on the board with its rolled value (a multiplier of the bet). */
+export interface PrizeCell {
+  reel: number;
+  row: number;
+  symbol: SymbolId;
+  value: number;
 }
 
 export interface SpinResult {
   /** Symbols laid out as grid[reel][row]. */
   grid: SymbolId[][];
   lineWins: LineWin[];
+  /** Every Prize symbol on the board with its value (for display + collect). */
+  prizes: PrizeCell[];
   /** Line win before any multiplier. */
   baseWin: number;
   /** Amount actually credited this spin (baseWin x multiplier). */
@@ -34,6 +46,8 @@ export interface SpinResult {
   triggeredFreeSpins?: number;
   /** Wilds counted on this Free Spin. */
   wildsCollected?: number;
+  /** Free Spins: amount the Wild(s) collected from Prize symbols (pre-multiplier). */
+  collectWin?: number;
   freeSpins?: FreeSpinSnapshot;
   holdAndRespin?: HoldAndRespinSnapshot;
 }

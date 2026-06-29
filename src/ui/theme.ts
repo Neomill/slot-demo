@@ -62,3 +62,29 @@ export const SEPARATOR = { width: 1, color: 0xf9ec7d };
 export const fontFamily =
   'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
 export const colors = { text: 0xffffff, accent: 0xffd34d, lock: 0xffd34d };
+
+/**
+ * Game controller (HUD) bar. Width matches the slot frame and it sits directly
+ * below it (FRAME bottom + gap), so the slot and controller share a width.
+ */
+export const HUD = { width: FRAME.width, height: 120, gap: 16 };
+export const HUD_POS = {
+  x: FRAME_POS.x,
+  y: FRAME_POS.y + FRAME.height + HUD.gap,
+};
+
+export const hudColors = {
+  barTop: 0x16243f,
+  barBottom: 0x080d18,
+  gold: 0xe8c879,
+  goldBright: 0xf7e08a,
+  label: 0xe9d8a6,
+  value: 0xffffff,
+  win: 0xffd23f,
+  green: 0x2f9e44,
+  greenLight: 0x69db7c,
+  greenDark: 0x1f6b30,
+  buttonFill: 0x0e1626,
+  box: 0x05080f,
+};
+

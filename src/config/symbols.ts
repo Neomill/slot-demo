@@ -33,7 +33,7 @@ export const SCATTER: SymbolId = 'bonus';
 /** Hold & Respin trigger / lock symbol (the "bonus" mechanic). */
 export const BONUS: SymbolId = 'trophy';
 
-export type SymbolKind = 'normal' | 'wild' | 'scatter' | 'bonus';
+export type SymbolKind = 'normal' | 'wild' | 'scatter' | 'bonus' | 'prize';
 
 export const SYMBOL_KIND: Record<SymbolId, SymbolKind> = {
   ace: 'normal',
@@ -41,9 +41,9 @@ export const SYMBOL_KIND: Record<SymbolId, SymbolKind> = {
   queen: 'normal',
   jack: 'normal',
   ten: 'normal',
-  goldhorse: 'normal',
-  redhorse: 'normal',
-  bluehorse: 'normal',
+  goldhorse: 'prize',
+  redhorse: 'prize',
+  bluehorse: 'prize',
   jocky: 'normal',
   cap: 'normal',
   binoculars: 'normal',

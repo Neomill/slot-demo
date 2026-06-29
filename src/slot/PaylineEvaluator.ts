@@ -72,6 +72,6 @@ export class PaylineEvaluator {
       positions.push({ reel, row: line[reel] });
     }
 
-    return { payline: index, symbol: base, count, positions, amount: multiplier * betPerLine };
+    return { payline: index, symbol: base, count, positions, amount: multiplier * betPerLine, kind: 'line' };
   }
 }

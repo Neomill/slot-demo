@@ -7,17 +7,18 @@ import { InvalidBonusError } from '../core/errors';
 import { Wallet } from './Wallet';
 import { ReelGenerator } from '../slot/ReelGenerator';
 import { PaylineEvaluator } from '../slot/PaylineEvaluator';
+import { PrizeEvaluator } from '../slot/PrizeEvaluator';
 import { BonusManager } from '../bonus/BonusManager';
 import { FreeSpinManager } from '../bonus/FreeSpinManager';
 import { HoldAndRespinManager } from '../bonus/HoldAndRespinManager';
 import { BuyBonusManager } from '../bonus/BuyBonusManager';
 import { PAYLINES } from '../config/paylines';
 import { PAYTABLE } from '../config/paytable';
-import { WILD, BONUS } from '../config/symbols';
+import { WILD } from '../config/symbols';
 import { gameConfig } from '../config/gameConfig';
 import { bonusConfig, type BuyBonusTier } from '../config/bonusConfig';
 import { GameEvent, type GameEventMap } from '../types/events';
-import type { SpinResult, GameStateSnapshot } from '../types/slot';
+import type { LineWin, SpinResult, GameStateSnapshot } from '../types/slot';
 
 export interface GameOptions {
   rng?: RNG;
@@ -27,11 +28,20 @@ export interface GameOptions {
   betPerLine?: number;
 }
 
+/** Keep only the highest-paying win on each payline (line vs prize). */
+function highestPerPayline(...sources: LineWin[][]): LineWin[] {
+  const best = new Map<number, LineWin>();
+  for (const win of sources.flat()) {
+    const current = best.get(win.payline);
+    if (!current || win.amount > current.amount) best.set(win.payline, win);
+  }
+  return [...best.values()];
+}
+
 /**
  * The headless slot engine. Owns the wallet, lifecycle state machine, RNG,
- * reel generation, payline evaluation, and the bonus managers. A single
- * `spin()` entry point branches on the current GameMode. No rendering — the
- * view layer is a pure subscriber to `events`.
+ * reel generation, payline + prize evaluation, and the bonus managers. A single
+ * `spin()` entry point branches on the current GameMode. No rendering.
  */
 export class Game {
   readonly events: EventBus<GameEventMap>;
@@ -40,6 +50,7 @@ export class Game {
 
   private readonly reels: ReelGenerator;
   private readonly evaluator: PaylineEvaluator;
+  private readonly prizes: PrizeEvaluator;
   private readonly bonus: BonusManager;
   private readonly freeSpins: FreeSpinManager;
   private readonly holdAndRespin: HoldAndRespinManager;
@@ -56,6 +67,7 @@ export class Game {
     this.wallet = new Wallet(options.startingBalance ?? gameConfig.startingBalance, this.events);
     this.reels = options.reelGenerator ?? new ReelGenerator(rng);
     this.evaluator = new PaylineEvaluator({ paylines: PAYLINES, paytable: PAYTABLE, wild: WILD });
+    this.prizes = new PrizeEvaluator(rng, PAYLINES);
     this.bonus = new BonusManager();
     this.freeSpins = new FreeSpinManager();
     this.holdAndRespin = new HoldAndRespinManager();
@@ -187,7 +199,14 @@ export class Game {
     this.events.emit(GameEvent.SpinStart, { betPerLine: this._betPerLine, stake: cost });
 
     const grid = this.reels.generate(this.chance2x ? 'chance2x' : 'base');
-    const { lineWins, totalWin: baseWin } = this.evaluator.evaluate(grid, this._betPerLine);
+    const prizes = this.prizes.roll(grid);
+
+    // Highest of (normal line win, prize-symbol win) on each payline.
+    const lineWins = highestPerPayline(
+      this.evaluator.evaluate(grid, this._betPerLine).lineWins,
+      this.prizes.evaluateMainGame(prizes, this._betPerLine),
+    );
+    const baseWin = lineWins.reduce((sum, win) => sum + win.amount, 0);
 
     this.state.set(GameState.EVALUATING);
     if (baseWin > 0) this.wallet.credit(baseWin, 'win');
@@ -198,6 +217,7 @@ export class Game {
     const result: SpinResult = {
       grid,
       lineWins,
+      prizes,
       baseWin,
       totalWin: baseWin,
       multiplier: 1,
@@ -232,9 +252,12 @@ export class Game {
     this.events.emit(GameEvent.SpinStart, { betPerLine: this._betPerLine, stake: 0 });
 
     const grid = this.reels.generate('freeSpins');
-    const { lineWins, totalWin: baseWin } = this.evaluator.evaluate(grid, this._betPerLine);
+    const prizes = this.prizes.roll(grid);
+    const lineTotal = this.evaluator.evaluate(grid, this._betPerLine);
 
     const wilds = this.bonus.countSymbol(grid, WILD);
+    const collectWin = this.prizes.collect(prizes, wilds, this._betPerLine);
+
     const collected = this.freeSpins.collectWilds(wilds);
     if (collected.stagesCrossed > 0) {
       this.events.emit(GameEvent.WildsCollected, {
@@ -246,6 +269,7 @@ export class Game {
     }
 
     const multiplier = this.freeSpins.currentMultiplier;
+    const baseWin = lineTotal.totalWin + collectWin;
     const win = baseWin * multiplier;
 
     this.state.set(GameState.EVALUATING);
@@ -255,7 +279,8 @@ export class Game {
 
     const result: SpinResult = {
       grid,
-      lineWins,
+      lineWins: lineTotal.lineWins,
+      prizes,
       baseWin,
       totalWin: win,
       multiplier,
@@ -263,6 +288,7 @@ export class Game {
       scatterCount: 0,
       bonusCount: 0,
       wildsCollected: wilds,
+      collectWin,
       freeSpins: this.freeSpins.snapshot(),
     };
     this.emitSettled(result);
@@ -291,23 +317,23 @@ export class Game {
     if (baseWin > 0) this.wallet.credit(baseWin, 'win');
     this.holdAndRespin.addWin(baseWin);
 
-    const bonusCount = this.bonus.countSymbol(grid, BONUS);
     const result: SpinResult = {
       grid: grid.map((column) => [...column]),
       lineWins,
+      prizes: this.prizes.roll(grid),
       baseWin,
       totalWin: baseWin,
       multiplier: 1,
       mode: GameMode.HOLD_AND_RESPIN,
       scatterCount: 0,
-      bonusCount,
+      bonusCount: this.bonus.countBonus(grid),
       holdAndRespin: this.holdAndRespin.snapshot(),
     };
 
     this.events.emit(GameEvent.HoldRespinUpdate, {
       remainingRespins: this.holdAndRespin.remaining,
       newBonus,
-      lockedBonus: bonusCount,
+      lockedBonus: result.bonusCount,
     });
     this.emitSettled(result);
 
