@@ -26,10 +26,19 @@ export const CELL_PADDING = 10;
 /** The reel grid is COLS x ROWS cells. */
 export const GRID = { width: COLS * CELL.width, height: ROWS * CELL.height };
 
-/** Frame is centered on the canvas. */
+/**
+ * How far the whole playfield sits below the vertical centre. Everything that
+ * derives from FRAME_POS — the frame, reels, backdrop, HUD, side panels and the
+ * free-spin overlay — shifts down by this, in every mode, leaving a fixed band
+ * at the top for the logo (and the free-spin panels). The logo and background
+ * don't derive from FRAME_POS, so they stay put.
+ */
+export const PLAYFIELD_DROP = 40;
+
+/** Frame is horizontally centered, pushed down by PLAYFIELD_DROP. */
 export const FRAME_POS = {
   x: (CANVAS.width - FRAME.width) / 2,
-  y: (CANVAS.height - FRAME.height) / 2,
+  y: (CANVAS.height - FRAME.height) / 2 + PLAYFIELD_DROP,
 };
 
 /** Tweak if the reels don't sit perfectly inside the frame's window. */
@@ -67,11 +76,96 @@ export const colors = { text: 0xffffff, accent: 0xffd34d, lock: 0xffd34d };
  * Game controller (HUD) bar. Width matches the slot frame and it sits directly
  * below it (FRAME bottom + gap), so the slot and controller share a width.
  */
-export const HUD = { width: FRAME.width, height: 120, gap: 16 };
+export const HUD = { width: FRAME.width, height: 120, gap: 0 };
 export const HUD_POS = {
   x: FRAME_POS.x,
   y: FRAME_POS.y + FRAME.height + HUD.gap,
 };
+
+/**
+ * The two call-to-action panels (Buy Bonus / Luck Boost) stacked in the margin
+ * to the left of the reel frame. Native art is 656x879 (portrait); width is the
+ * knob — height follows the art's aspect, and the pair is centred vertically on
+ * the frame. Nudge `centerX` to slide them toward or away from the frame.
+ */
+const SIDE_ASPECT = 879 / 656;
+export const SIDE_PANEL = (() => {
+  const width = 150;
+  const height = Math.round(width * SIDE_ASPECT);
+  const gap = 5;
+  const centerX = 360;
+  const stackCenterY = FRAME_POS.y + FRAME.height / 2 - 30;
+  const half = (height + gap) / 2;
+  return {
+    width,
+    height,
+    gap,
+    centerX,
+    buyY: stackCenterY - half,
+    luckY: stackCenterY + half,
+  };
+})();
+
+/**
+ * The Free Spins overlay that sits in the band directly above the reel frame.
+ * Left: a large counter (FREE SPINS label + remaining-spins digits) whose left
+ * edge lines up with the frame's left edge. Right: three small multiplier panels
+ * (×2 / ×3 / ×10) in a row, each showing four wild locks that turn to unlocks as
+ * wilds are collected; the row's right edge lines up with the frame's right edge
+ * and `gap` is the horizontal space between panels. Native art: counter 140×114,
+ * panel 160×49.
+ */
+export const FREE_SPIN_PANEL = (() => {
+  const baseY = FRAME_POS.y - 6; // panels' bottoms sit just above the frame
+
+  const counterWidth = 130; // counter size; height follows the art's aspect
+  const counterHeight = Math.round((counterWidth * 114) / 140);
+
+  // Move the top-left counter from its default (left edge on the frame, bottom
+  // just above it): +x = right, -x = left; +y = down, -y = up.
+  const counterNudge = { x: 50, y: 30 };
+
+  const panelWidth = 185;
+  // Panel height in px. The art is natively 160×49, so panelWidth × 49/160 (≈57
+  // here) keeps it undistorted; a larger value stretches the plate taller.
+  const panelHeight = 69;
+  const panelGap = 6;
+
+  // Move the whole multiplier row from its default (right edge on the frame,
+  // bottom just above it): +x = right, -x = left; +y = down, -y = up.
+  const panelNudge = { x: -50, y: 30 };
+
+  return {
+    baseY,
+    counter: {
+      width: counterWidth,
+      height: counterHeight,
+      x: FRAME_POS.x + counterNudge.x, // left edge aligned with the frame
+      y: baseY - counterHeight + counterNudge.y,
+    },
+    panel: {
+      width: panelWidth,
+      height: panelHeight,
+      gap: panelGap,
+      rightX: FRAME_POS.x + FRAME.width + panelNudge.x, // right edge aligned with the frame
+      nudgeY: panelNudge.y,
+    },
+    /** Four wild locks per panel; three panels → the 12-wild progression. */
+    wildsPerPanel: 4,
+  };
+})();
+
+/** Idle (dull) vs. lit (full-colour) look for the side panels. */
+export const SIDE_PANEL_LOOK = {
+  dullSaturate: -0.2, // ColorMatrix saturate amount when idle (0 = unchanged)
+  dullBrightness: 0.9, // brightness multiplier when idle (1 = unchanged)
+  hoverScale: 1,
+  pressScale: 1,
+  glowColor: 0xffe08a,
+  glowAlpha: 0.3,
+  /** ms to ease between dull and lit. */
+  fadeMs: 140,
+} as const;
 
 export const hudColors = {
   barTop: 0x16243f,
@@ -87,4 +181,3 @@ export const hudColors = {
   buttonFill: 0x0e1626,
   box: 0x05080f,
 };
-

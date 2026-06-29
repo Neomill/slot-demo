@@ -63,7 +63,7 @@ describe('Game — base mode', () => {
     expect(game.balance).toBe(3);
   });
 
-  it('Chance x2 doubles the cost and uses the chance2x reels', async () => {
+  it('Chance x2 adds a 50% surcharge and uses the chance2x reels', async () => {
     let usedSet: ReelSetId | null = null;
     const reels = {
       generate: (setId: ReelSetId) => {
@@ -74,7 +74,7 @@ describe('Game — base mode', () => {
     const game = new Game({ reelGenerator: reels, startingBalance: 1000, betPerLine: 1 });
     await game.init();
     game.setChance2x(true);
-    expect(game.spinCost).toBe(game.currentBet * 2);
+    expect(game.spinCost).toBe(game.currentBet * 1.5);
     const cost = game.spinCost;
     await game.spin();
     expect(usedSet).toBe('chance2x');

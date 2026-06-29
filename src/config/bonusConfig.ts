@@ -50,8 +50,8 @@ export const bonusConfig = {
   },
 
   chance2x: {
-    /** Spin cost is multiplied by this when Chance x2 is enabled. */
-    costMultiplier: 2,
+    /** Spin cost is multiplied by this when Chance x2 (Luck Boost) is enabled — a +50% surcharge. */
+    costMultiplier: 1.5,
   },
 } as const;
 

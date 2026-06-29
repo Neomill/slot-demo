@@ -3,7 +3,6 @@ import {
   Assets,
   Graphics,
   Sprite,
-  Text,
   type Ticker,
   type Texture,
 } from "pixi.js";
@@ -12,6 +11,7 @@ import { GameMode } from "../core/GameMode";
 import { GameState } from "../core/GameState";
 import { GameEvent } from "../types/events";
 import { gameConfig } from "../config/gameConfig";
+import { bonusConfig, type BuyBonusTier } from "../config/bonusConfig";
 import { WILD } from "../config/symbols";
 import type { SymbolId } from "../config/symbols";
 import type { Position, SpinResult } from "../types/slot";
@@ -27,14 +27,14 @@ import {
   FRAME,
   FRAME_POS,
   GRID,
-  HUD,
   HUD_POS,
   REEL_ORIGIN,
-  fontFamily,
-  colors,
 } from "./theme";
 import { Reels } from "./Reels";
 import { Hud } from "./hud";
+import { SidePanel } from "./SidePanel";
+import { FreeSpinPanel } from "./FreeSpinPanel";
+import { money } from "./hud/text";
 
 // Pleasant resting board shown before the first spin.
 // Resting board: no prize horses here, so nothing shows a value before a spin.
@@ -60,6 +60,9 @@ function wildPositions(grid: SymbolId[][]): Position[] {
 /** Pause between auto-played bonus spins (free spins / hold & respin). */
 const BONUS_SPIN_DELAY = 700;
 
+/** Which bonus tier the Buy Bonus panel purchases. */
+const BUY_BONUS_TIER: BuyBonusTier = "super";
+
 /** Ensure Barlow Condensed is ready before Pixi rasterizes any text with it. */
 async function loadFonts(): Promise<void> {
   if (!("fonts" in document)) return;
@@ -82,9 +85,12 @@ export class SlotScene {
   readonly app: Application;
   private readonly game: Game;
   private background!: Sprite;
+  private backdrop!: Graphics;
+  private frame!: Sprite;
   private reels!: Reels;
   private hud!: Hud;
-  private status!: Text;
+  private sidePanel!: SidePanel;
+  private freeSpinPanel!: FreeSpinPanel;
   private autoTimer: number | null = null;
   private busy = false; // true while a spin animation is playing
 
@@ -111,12 +117,15 @@ export class SlotScene {
     this.subscribe();
     await this.game.init();
     this.hud.setWin(0);
+    this.sidePanel.setLuckBoost(this.game.isChance2x);
+    this.updateSidePanelCosts();
     this.refreshControls();
-    this.updateStatus();
+    this.refreshFreeSpinOverlay();
 
     this.app.ticker.add((ticker: Ticker) => {
       this.reels.update(ticker.deltaMS);
       this.hud.update(ticker.deltaMS);
+      this.sidePanel.update(ticker.deltaMS);
     });
   }
 
@@ -129,7 +138,7 @@ export class SlotScene {
     this.background.width = CANVAS.width;
     this.background.height = CANVAS.height;
 
-    const backdrop = new Graphics()
+    this.backdrop = new Graphics()
       .roundRect(
         REEL_ORIGIN.x - BACKDROP.paddingX,
         REEL_ORIGIN.y - BACKDROP.paddingY,
@@ -142,10 +151,10 @@ export class SlotScene {
     this.reels = new Reels(INITIAL_GRID);
     this.reels.position.set(REEL_ORIGIN.x, REEL_ORIGIN.y);
 
-    const frame = new Sprite(Assets.get<Texture>(FRAME_TEXTURE));
-    frame.position.set(FRAME_POS.x, FRAME_POS.y);
-    frame.width = FRAME.width;
-    frame.height = FRAME.height;
+    this.frame = new Sprite(Assets.get<Texture>(FRAME_TEXTURE));
+    this.frame.position.set(FRAME_POS.x, FRAME_POS.y);
+    this.frame.width = FRAME.width;
+    this.frame.height = FRAME.height;
 
     const logo = new Sprite(Assets.get<Texture>(LOGO));
     logo.anchor.set(0.5, 0);
@@ -159,22 +168,24 @@ export class SlotScene {
     });
     this.hud.position.set(HUD_POS.x, HUD_POS.y);
 
-    this.status = new Text({
-      text: "",
-      style: { fill: colors.text, fontFamily, fontSize: 22, fontWeight: "700" },
+    this.sidePanel = new SidePanel({
+      onBuyBonus: () => this.game.buyBonus(BUY_BONUS_TIER),
+      onToggleLuckBoost: () => this.game.setChance2x(!this.game.isChance2x),
     });
-    this.status.anchor.set(0.5, 0);
-    this.status.position.set(CANVAS.width / 2, HUD_POS.y + HUD.height + 14);
 
-    // background → backdrop → reels → frame → logo → HUD → status
+    this.freeSpinPanel = new FreeSpinPanel();
+
+    // background → backdrop → reels → frame → logo → side panels → free-spin
+    // overlay → HUD
     stage.addChild(
       this.background,
-      backdrop,
+      this.backdrop,
       this.reels,
-      frame,
+      this.frame,
       logo,
+      this.sidePanel,
+      this.freeSpinPanel,
       this.hud,
-      this.status,
     );
   }
 
@@ -184,7 +195,7 @@ export class SlotScene {
     events.on(GameEvent.ModeChange, ({ to }) => {
       this.setBackground(to);
       this.refreshControls(); // entering/leaving a bonus mode flips the spin button immediately
-      this.updateStatus();
+      this.refreshFreeSpinOverlay();
     });
     events.on(GameEvent.SpinResult, ({ result }) => void this.render(result));
     events.on(GameEvent.SpinStart, () => this.hud.setWin(0));
@@ -194,21 +205,23 @@ export class SlotScene {
     });
     events.on(GameEvent.BetChange, ({ stake }) => {
       this.hud.setBet(stake);
+      this.updateSidePanelCosts();
       this.refreshControls();
     });
     // Total Win is shown by render() once the reels land (see Spin Results).
-    events.on(GameEvent.SpinSettled, () => this.updateStatus());
-    events.on(GameEvent.ChanceChange, ({ enabled }) =>
-      this.hud.setTurbo(enabled),
-    );
+    events.on(GameEvent.SpinSettled, () => this.refreshFreeSpinOverlay());
+    events.on(GameEvent.ChanceChange, ({ enabled }) => {
+      this.hud.setTurbo(enabled);
+      this.sidePanel.setLuckBoost(enabled);
+    });
     events.on(GameEvent.FreeSpinsStart, ({ trigger }) => {
-      this.updateStatus();
+      this.refreshFreeSpinOverlay();
       // A bought bonus has no triggering spin, so start the auto-play here.
       if (trigger === "buy") this.scheduleNextBonusSpin();
     });
-    events.on(GameEvent.WildsCollected, () => this.updateStatus());
-    events.on(GameEvent.HoldRespinStart, () => this.updateStatus());
-    events.on(GameEvent.HoldRespinUpdate, () => this.updateStatus());
+    events.on(GameEvent.WildsCollected, () => this.refreshFreeSpinOverlay());
+    events.on(GameEvent.HoldRespinStart, () => this.refreshFreeSpinOverlay());
+    events.on(GameEvent.HoldRespinUpdate, () => this.refreshFreeSpinOverlay());
   }
 
   private async render(result: SpinResult): Promise<void> {
@@ -240,7 +253,7 @@ export class SlotScene {
     this.hud.setWin(result.totalWin);
     this.busy = false;
     this.refreshControls();
-    this.updateStatus();
+    this.refreshFreeSpinOverlay();
 
     // Auto-play bonus rounds until they finish (respects retriggers, which keep
     // the mode non-BASE by adding spins / resetting respins).
@@ -259,6 +272,18 @@ export class SlotScene {
     this.hud.setSpinEnabled(idle && this.game.balance >= this.game.spinCost);
     this.hud.setBetEnabled(idle);
     this.hud.setTurboEnabled(idle);
+    this.sidePanel.setEnabled(idle);
+  }
+
+  /** Reflect the current Buy Bonus price and Luck Boost surcharge on the side panel. */
+  private updateSidePanelCosts(): void {
+    const bet = this.game.currentBet;
+    const buyCost = bonusConfig.buyBonus[BUY_BONUS_TIER].costMultiplier * bet;
+    this.sidePanel.setBuyPrice(money(buyCost));
+
+    // Luck Boost adds the surcharge above a normal spin (e.g. 1.5x → +50% of bet).
+    const luckSurcharge = (bonusConfig.chance2x.costMultiplier - 1) * bet;
+    this.sidePanel.setLuckCost(`+${money(luckSurcharge)}`);
   }
 
   /** Queue the next bonus spin if a bonus round is still running. */
@@ -283,15 +308,19 @@ export class SlotScene {
     if (next !== this.game.betPerLine) this.game.setBet(next);
   }
 
-  private updateStatus(): void {
+  /**
+   * Show the Free Spins overlay (counter + multiplier ladder) only in free
+   * spins and keep its values current. The playfield's downward shift is a
+   * constant baked into the layout (see PLAYFIELD_DROP), so nothing moves here.
+   */
+  private refreshFreeSpinOverlay(): void {
     const s = this.game.getState();
-    let text = GameMode[s.mode];
+    const inFreeSpins = s.mode === GameMode.FREE_SPINS && !!s.freeSpins;
+
+    this.freeSpinPanel.visible = inFreeSpins;
     if (s.freeSpins) {
-      text += `   ·   FREE SPINS ×${s.freeSpins.multiplier} · ${s.freeSpins.remaining} left · wilds ${s.freeSpins.wildCounter}`;
+      this.freeSpinPanel.setRemaining(s.freeSpins.remaining);
+      this.freeSpinPanel.setWildCounter(s.freeSpins.wildCounter);
     }
-    if (s.holdAndRespin) {
-      text += `   ·   HOLD & RESPIN · ${s.holdAndRespin.remainingRespins} respins`;
-    }
-    this.status.text = text;
   }
 }
