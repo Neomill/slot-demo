@@ -1,9 +1,10 @@
-import { Container, Graphics, Text } from 'pixi.js';
+import { BlurFilter, Container, Graphics, Text } from 'pixi.js';
 import type { SymbolId } from '../config/symbols';
-import { SYMBOLS } from '../config/symbols';
+import { SYMBOLS, SCATTER } from '../config/symbols';
 import type { Position, PrizeCell } from '../types/slot';
-import { CELL, COLS, ROWS, SPIN, SEPARATOR, fontFamily, colors } from './theme';
+import { ANTICIPATION, CELL, COLS, ROWS, SPIN, SEPARATOR, fontFamily, colors } from './theme';
 import { makeSymbolSprite } from './SymbolSprite';
+import { planAnticipation, type AnticipationPlan } from './anticipation';
 
 /** Random filler symbols shown while a reel is mid-spin (cosmetic only). */
 const FILLERS = 10;
@@ -12,12 +13,37 @@ function randomSymbol(): SymbolId {
   return SYMBOLS[Math.floor(Math.random() * SYMBOLS.length)];
 }
 
+type Easing = (t: number) => number;
+
 function easeOutCubic(t: number): number {
   return 1 - Math.pow(1 - t, 3);
 }
 
+/** Longer fast phase, sharper settle — the deliberate "extended spin" feel. */
+function easeOutQuint(t: number): number {
+  return 1 - Math.pow(1 - t, 5);
+}
+
+/**
+ * Overshoots past the stop then settles back — the reel lets the Scatter slip a
+ * hair past the payline before pulling it home (the spec's near-miss tease).
+ */
+function easeOutBack(t: number): number {
+  const c1 = 1.70158;
+  const c3 = c1 + 1;
+  return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2);
+}
+
 function easeInQuad(t: number): number {
   return t * t;
+}
+
+/** Scatter landing bounce: 1 → 0.92 → 1.08 → 1 over the bounce window. */
+function bounceScale(elapsed: number): number {
+  const t = Math.min(1, elapsed / ANTICIPATION.bounceMs);
+  if (t < 0.33) return 1 - 0.08 * (t / 0.33);
+  if (t < 0.66) return 0.92 + 0.16 * ((t - 0.33) / 0.33);
+  return 1.08 - 0.08 * ((t - 0.66) / 0.34);
 }
 
 function formatCash(n: number): string {
@@ -80,6 +106,39 @@ interface Glow {
   duration: number;
 }
 
+/** Scene-level effects the reels ask for during the anticipation cinematic. */
+export interface CinematicHooks {
+  /** Dim/restore the background (focus the reels). */
+  dim(active: boolean): void;
+  /** Flash a full-screen bloom as the triggering Scatter lands. */
+  bloom(): void;
+}
+
+/** A landed tile mid-bounce (the Scatter's squash-and-stretch on arrival). */
+interface Bounce {
+  tile: Container;
+  elapsed: number;
+}
+
+/** An expanding gold shockwave ring. */
+interface Shockwave {
+  node: Graphics;
+  elapsed: number;
+}
+
+/** Live state while an anticipation cinematic plays out. */
+interface AntState {
+  plan: AnticipationPlan;
+  hooks: CinematicHooks;
+  landed: Set<number>;
+  breathe: number;
+  shake: number;
+  /** Reels base position, captured the first frame we shake it. */
+  baseX: number;
+  baseY: number;
+  shaking: boolean;
+}
+
 /** One unlocked cell mid-respin: a single-cell strip scrolling to its target. */
 interface CellSpin {
   reel: number;
@@ -103,6 +162,11 @@ class ReelColumn extends Container {
   private fromY = 0;
   private target: SymbolId[] = [];
   private resolve?: () => void;
+  private easing: Easing = easeOutCubic;
+  /** |Δy| on the last frame — drives the spinning reel's motion blur. */
+  private lastSpeed = 0;
+  private blur?: BlurFilter;
+  private blurOn = false;
   /** Row -> badge text for the landed (visible) prize cells. */
   private prizeByRow = new Map<number, string>();
   /** Row -> the badge node currently shown, so collect can detach it. */
@@ -118,23 +182,40 @@ class ReelColumn extends Container {
     this.set(initial);
   }
 
+  get isSpinning(): boolean {
+    return this.spinning;
+  }
+
+  /** Pixels scrolled on the last frame — used to size the motion blur. */
+  get speed(): number {
+    return this.lastSpeed;
+  }
+
   set(symbols: SymbolId[], prizeByRow?: Map<number, string>): void {
     this.spinning = false;
     this.resolve?.();
     this.resolve = undefined;
     this.prizeByRow = prizeByRow ?? new Map();
+    this.setBlur(0);
     this.build(symbols.slice(0, ROWS));
     this.strip.y = 0;
   }
 
-  spinTo(target: SymbolId[], durationMs: number, prizeByRow: Map<number, string>): Promise<void> {
+  spinTo(
+    target: SymbolId[],
+    durationMs: number,
+    prizeByRow: Map<number, string>,
+    easing: Easing = easeOutCubic,
+  ): Promise<void> {
     this.target = target.slice(0, ROWS);
     this.prizeByRow = prizeByRow;
+    this.easing = easing;
     const strip: SymbolId[] = [...this.target];
     for (let i = 0; i < FILLERS; i++) strip.push(randomSymbol());
     this.build(strip);
     this.fromY = -FILLERS * CELL.height;
     this.strip.y = this.fromY;
+    this.lastSpeed = 0;
     this.elapsed = 0;
     this.duration = durationMs;
     this.spinning = true;
@@ -145,15 +226,44 @@ class ReelColumn extends Container {
     if (!this.spinning) return;
     this.elapsed += dtMs;
     const t = Math.min(1, this.elapsed / this.duration);
-    this.strip.y = this.fromY * (1 - easeOutCubic(t));
+    const prevY = this.strip.y;
+    this.strip.y = this.fromY * (1 - this.easing(t));
+    this.lastSpeed = Math.abs(this.strip.y - prevY);
     if (t >= 1) {
       this.spinning = false;
+      this.lastSpeed = 0;
+      this.setBlur(0);
       this.build(this.target);
       this.strip.y = 0;
       const done = this.resolve;
       this.resolve = undefined;
       done?.();
     }
+  }
+
+  /** Vertical-only motion blur on the scrolling strip (0 disables it). */
+  setBlur(strength: number): void {
+    if (strength <= 0.05) {
+      if (this.blurOn) {
+        this.strip.filters = [];
+        this.blurOn = false;
+      }
+      return;
+    }
+    if (!this.blur) {
+      this.blur = new BlurFilter({ strength: 0, quality: 3 });
+      this.blur.strengthX = 0;
+    }
+    this.blur.strengthY = strength;
+    if (!this.blurOn) {
+      this.strip.filters = [this.blur];
+      this.blurOn = true;
+    }
+  }
+
+  /** The landed tile at a visible row, so a feature can bounce/animate it. */
+  getTile(row: number): Container | undefined {
+    return this.tilesByRow.get(row);
   }
 
   /** Detach (hide) the baked prize badge at a row, so it can fly to the Wild. */
@@ -193,6 +303,11 @@ export class Reels extends Container {
   private winPulse = 0;
   private flying: FlyingBadge[] = [];
   private glows: Glow[] = [];
+  private bounces: Bounce[] = [];
+  private shockwaves: Shockwave[] = [];
+  /** The breathing gold outline on the active anticipation reel. */
+  private antOutline?: Graphics;
+  private ant: AntState | null = null;
   private respins: CellSpin[] = [];
   private respinResolve?: () => void;
   private collectResolve?: () => void;
@@ -227,6 +342,9 @@ export class Reels extends Container {
     this.updateRespins(dtMs);
     this.updateFlying(dtMs);
     this.updateGlows(dtMs);
+    this.updateAnticipation(dtMs);
+    this.updateBounces(dtMs);
+    this.updateShockwaves(dtMs);
   }
 
   /** Snap to a board. `prizes` bake value badges onto the prize cells. */
@@ -239,19 +357,221 @@ export class Reels extends Container {
     this.displayed = grid.map((column) => [...column]);
   }
 
-  /** Animated spin: reels scroll and land staggered, prize values baked into the tiles. */
-  spin(grid: SymbolId[][], prizes: PrizeCell[], betPerLine: number): Promise<void> {
+  /**
+   * Animated spin: reels scroll and land staggered, prize values baked into the
+   * tiles. When `hooks` are supplied (base spins only) and the board earns it,
+   * the spin plays the Free Spins anticipation cinematic — extended teasing
+   * reels, a breathing gold outline, camera shake, motion blur, and a bounce +
+   * shockwave + bloom as the triggering Scatter lands. The reels only reveal the
+   * predetermined board; the cinematic never changes the outcome.
+   */
+  spin(
+    grid: SymbolId[][],
+    prizes: PrizeCell[],
+    betPerLine: number,
+    hooks?: CinematicHooks,
+  ): Promise<void> {
     this.highlights.removeChildren();
     this.clearWins();
     this.clearCollectFx();
     this.clearRespins();
+    this.endAnticipation();
     const byColumn = this.prizeMaps(prizes, betPerLine);
     this.displayed = grid.map((column) => [...column]);
+
+    const plan = hooks ? planAnticipation(grid, SCATTER, COLS) : null;
+    if (plan && hooks) return this.spinAnticipated(grid, byColumn, plan, hooks);
+
     return Promise.all(
       this.columns.map((column, i) =>
         column.spinTo(grid[i] ?? [], SPIN.baseMs + i * SPIN.staggerMs, byColumn[i]),
       ),
     ).then(() => undefined);
+  }
+
+  /**
+   * The cinematic spin. Every reel starts together, but the teasing reels are
+   * given long, escalating durations so they stop one at a time, left → right,
+   * after the others. As each reel lands we count Scatters and fire the matching
+   * effects; `updateAnticipation` drives the per-frame outline/shake/blur.
+   */
+  private spinAnticipated(
+    grid: SymbolId[][],
+    byColumn: Map<number, string>[],
+    plan: AnticipationPlan,
+    hooks: CinematicHooks,
+  ): Promise<void> {
+    this.ant = {
+      plan,
+      hooks,
+      landed: new Set(),
+      breathe: 0,
+      shake: 0,
+      baseX: this.x,
+      baseY: this.y,
+      shaking: false,
+    };
+
+    const spins = this.columns.map((column, reel) => {
+      const antIndex = plan.anticipationReels.indexOf(reel);
+      const duration =
+        antIndex >= 0
+          ? ANTICIPATION.baseMs + antIndex * ANTICIPATION.stepMs
+          : SPIN.baseMs + reel * SPIN.staggerMs;
+      const easing =
+        reel === plan.triggerReel ? easeOutBack : antIndex >= 0 ? easeOutQuint : easeOutCubic;
+      return column
+        .spinTo(grid[reel] ?? [], duration, byColumn[reel], easing)
+        .then(() => this.onAnticipationLand(reel));
+    });
+
+    return Promise.all(spins).then(() => this.endAnticipation());
+  }
+
+  /** Fire the landing effects for one reel and advance the anticipation. */
+  private onAnticipationLand(reel: number): void {
+    const a = this.ant;
+    if (!a) return;
+    a.landed.add(reel);
+    this.columns[reel]?.setBlur(0);
+
+    // The second Scatter just landed — focus the board on the reels.
+    if (reel === a.plan.twoAt) a.hooks.dim(true);
+
+    // The Scatter that completes the 3+ trigger: bounce it, burst a shockwave,
+    // and bloom the screen.
+    if (reel === a.plan.triggerReel) {
+      for (const row of a.plan.scatterRowsByReel[reel]) {
+        const tile = this.columns[reel]?.getTile(row);
+        if (tile) this.bounces.push({ tile, elapsed: 0 });
+        const c = cellCenter(reel, row);
+        this.spawnShockwave(c.x, c.y);
+      }
+      a.hooks.bloom();
+    }
+
+    // Once every teasing reel has stopped, lift the dim and end the build-up.
+    if (a.plan.anticipationReels.every((r) => a.landed.has(r))) a.hooks.dim(false);
+  }
+
+  /** Per-frame: breathing outline on the active reel, camera shake, motion blur. */
+  private updateAnticipation(dtMs: number): void {
+    const a = this.ant;
+    if (!a) return;
+    a.breathe += dtMs;
+
+    // The active reel is the leftmost teasing reel still spinning — but only
+    // once the second Scatter has actually landed.
+    let active = -1;
+    if (a.landed.has(a.plan.twoAt)) {
+      for (const reel of a.plan.anticipationReels) {
+        if (!a.landed.has(reel)) {
+          active = reel;
+          break;
+        }
+      }
+    }
+
+    if (active >= 0) {
+      const cycle = Math.sin((a.breathe / ANTICIPATION.breatheMs) * Math.PI * 2) * 0.5 + 0.5;
+      const alpha =
+        ANTICIPATION.breatheMin + (ANTICIPATION.breatheMax - ANTICIPATION.breatheMin) * cycle;
+      this.showAntOutline(active, alpha);
+
+      // Subtle camera shake on the reels (≈ ±1px) while a reel teases.
+      a.shake += dtMs;
+      if (!a.shaking) {
+        a.baseX = this.x;
+        a.baseY = this.y;
+        a.shaking = true;
+      }
+      const dx = Math.sin((a.shake / 1000) * Math.PI * 2 * ANTICIPATION.shakeHz) * ANTICIPATION.shakeAmp;
+      this.position.set(a.baseX + dx, a.baseY);
+    } else {
+      this.hideAntOutline();
+      this.stopShake(a);
+    }
+
+    // Motion blur tracks each teasing reel's scroll speed, so it fades to zero
+    // as the reel eases to a stop.
+    for (const reel of a.plan.anticipationReels) {
+      const column = this.columns[reel];
+      if (!column) continue;
+      column.setBlur(column.isSpinning ? Math.min(ANTICIPATION.blurMax, column.speed * 0.4) : 0);
+    }
+  }
+
+  private showAntOutline(reel: number, alpha: number): void {
+    if (!this.antOutline) {
+      this.antOutline = new Graphics()
+        .roundRect(2, 2, CELL.width - 4, ROWS * CELL.height - 4, 10)
+        .stroke({ width: ANTICIPATION.outlineWidth, color: ANTICIPATION.outlineColor });
+      this.fxLayer.addChild(this.antOutline);
+    }
+    this.antOutline.visible = true;
+    this.antOutline.x = reel * CELL.width;
+    this.antOutline.alpha = alpha;
+  }
+
+  private hideAntOutline(): void {
+    if (!this.antOutline) return;
+    this.fxLayer.removeChild(this.antOutline);
+    this.antOutline.destroy();
+    this.antOutline = undefined;
+  }
+
+  private stopShake(a: AntState): void {
+    if (!a.shaking) return;
+    this.position.set(a.baseX, a.baseY);
+    a.shaking = false;
+  }
+
+  /** Tear down all cinematic state, restoring the reels to a neutral pose. */
+  private endAnticipation(): void {
+    const a = this.ant;
+    if (!a) return;
+    this.stopShake(a);
+    this.hideAntOutline();
+    for (const reel of a.plan.anticipationReels) this.columns[reel]?.setBlur(0);
+    this.ant = null;
+  }
+
+  private updateBounces(dtMs: number): void {
+    if (this.bounces.length === 0) return;
+    this.bounces = this.bounces.filter((b) => {
+      b.elapsed += dtMs;
+      if (b.elapsed >= ANTICIPATION.bounceMs) {
+        b.tile.scale.set(1);
+        return false;
+      }
+      b.tile.scale.set(bounceScale(b.elapsed));
+      return true;
+    });
+  }
+
+  private spawnShockwave(x: number, y: number): void {
+    const ring = new Graphics()
+      .circle(0, 0, ANTICIPATION.shockwaveRadius)
+      .stroke({ width: 4, color: ANTICIPATION.outlineColor });
+    ring.position.set(x, y);
+    ring.scale.set(0);
+    this.fxLayer.addChild(ring);
+    this.shockwaves.push({ node: ring, elapsed: 0 });
+  }
+
+  private updateShockwaves(dtMs: number): void {
+    if (this.shockwaves.length === 0) return;
+    this.shockwaves = this.shockwaves.filter((s) => {
+      s.elapsed += dtMs;
+      const t = Math.min(1, s.elapsed / ANTICIPATION.shockwaveMs);
+      s.node.scale.set(t);
+      s.node.alpha = 1 - t;
+      if (t >= 1) {
+        this.fxLayer.removeChild(s.node);
+        return false;
+      }
+      return true;
+    });
   }
 
   /** Hold & Respin: snap to the board and outline the locked cells. */
@@ -454,9 +774,12 @@ export class Reels extends Container {
 
   /** Reset any in-flight collect FX (called when a new spin starts). */
   clearCollectFx(): void {
-    this.fxLayer.removeChildren();
+    this.fxLayer.removeChildren(); // also drops the anticipation outline + shockwaves
     this.flying = [];
     this.glows = [];
+    this.antOutline = undefined;
+    this.shockwaves = [];
+    this.bounces = [];
     this.collectPrizes = [];
     this.collectWilds = [];
     this.collectPassIndex = 0;

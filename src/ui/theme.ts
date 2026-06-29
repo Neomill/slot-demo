@@ -54,6 +54,45 @@ export const REEL_ORIGIN = {
 export const SPIN = { baseMs: 650, staggerMs: 140 };
 
 /**
+ * Free Spins anticipation cinematic. Kicks in on a base spin once two Scatter
+ * (Bonus) symbols have landed and a later reel can still complete the 3+ trigger
+ * (see planAnticipation). Every value here is presentation-only — the reels
+ * reveal the predetermined outcome, never change it.
+ */
+export const ANTICIPATION = {
+  /** Base extended-spin length for the first anticipation reel (ms). */
+  baseMs: 1500,
+  /** Each subsequent anticipation reel spins this much longer than the last. */
+  stepMs: 650,
+  /** Background brightness while anticipating (1 = full). */
+  dimBrightness: 0.7,
+  /** Ease time for the background dim in/out (ms). */
+  dimFadeMs: 220,
+  /** Gold "this reel can complete it" outline (matches `colors.accent`). */
+  outlineColor: 0xffd34d,
+  outlineWidth: 5,
+  /** Breathing glow: alpha eases between min and max over one full cycle. */
+  breatheMs: 1000,
+  breatheMin: 0.8,
+  breatheMax: 1.0,
+  /** Subtle camera shake on the reels while an anticipation reel spins. */
+  shakeAmp: 1.2, // px
+  shakeHz: 13,
+  /** Vertical motion blur cap on a spinning anticipation reel. */
+  blurMax: 8,
+  /** Scatter landing bounce (scale 1 → 0.92 → 1.08 → 1). */
+  bounceMs: 160,
+  /** Gold shockwave ring that bursts from a landed Scatter. */
+  shockwaveMs: 520,
+  shockwaveRadius: 250,
+  /** Full-screen bloom flash on the triggering Scatter / Free Spins entry. */
+  bloomMs: 600,
+  bloomPeak: 0.55,
+  /** Beat between the cinematic landing and the Free Spins intro. */
+  entryPauseMs: 400,
+} as const;
+
+/**
  * The dark panel behind the reels. By default it matches the reel grid exactly;
  * use paddingX/paddingY to grow (or, with negatives, shrink) it on each side.
  */

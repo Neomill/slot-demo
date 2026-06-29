@@ -12,7 +12,7 @@ import { GameState } from "../core/GameState";
 import { GameEvent } from "../types/events";
 import { gameConfig } from "../config/gameConfig";
 import { bonusConfig, type BuyBonusTier } from "../config/bonusConfig";
-import { WILD, BONUS } from "../config/symbols";
+import { WILD, BONUS, SCATTER, SYMBOLS } from "../config/symbols";
 import type { SymbolId } from "../config/symbols";
 import type { Position, PrizeCell, SpinResult } from "../types/slot";
 import {
@@ -22,6 +22,7 @@ import {
   ALL_ASSET_URLS,
 } from "../assets/manifest";
 import {
+  ANTICIPATION,
   BACKDROP,
   CANVAS,
   FRAME,
@@ -30,7 +31,7 @@ import {
   HUD_POS,
   REEL_ORIGIN,
 } from "./theme";
-import { Reels } from "./Reels";
+import { Reels, type CinematicHooks } from "./Reels";
 import { Hud } from "./hud";
 import { SidePanel } from "./SidePanel";
 import { FreeSpinPanel } from "./FreeSpinPanel";
@@ -84,6 +85,50 @@ const BONUS_SPIN_DELAY = 700;
 /** Which bonus tier the Buy Bonus panel purchases. */
 const BUY_BONUS_TIER: BuyBonusTier = "super";
 
+const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** Normal symbols only — used to fill a synthesized board behind the Scatters. */
+const FILLER_SYMBOLS = SYMBOLS.filter((s) => s !== SCATTER && s !== WILD && s !== BONUS);
+
+/** Fisher–Yates shuffle (returns a new array). */
+function shuffle<T>(items: T[]): T[] {
+  const out = [...items];
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [out[i], out[j]] = [out[j], out[i]];
+  }
+  return out;
+}
+
+/**
+ * A display-only board for the Buy Bonus cinematic. The engine jumps straight
+ * into Free Spins on a purchase, so we fabricate a base board that lands the
+ * trigger: exactly `maxScatters` Scatters (the board cap), each on a different
+ * reel at a random row. Spreading them across distinct reels keeps the running
+ * count climbing cleanly to two before a later reel completes it, so the
+ * left-to-right anticipation build-up always plays (see planAnticipation). The
+ * Scatter layout is fresh every purchase; the awarded spins come from the bonus
+ * tier, not the count shown.
+ */
+function buyBonusBoard(): SymbolId[][] {
+  const { reels, rows } = gameConfig;
+  const grid: SymbolId[][] = [];
+  for (let reel = 0; reel < reels; reel++) {
+    const column: SymbolId[] = [];
+    for (let row = 0; row < rows; row++) {
+      column.push(FILLER_SYMBOLS[Math.floor(Math.random() * FILLER_SYMBOLS.length)]);
+    }
+    grid.push(column);
+  }
+
+  const count = Math.min(bonusConfig.freeSpins.maxScatters, reels);
+  const scatterReels = shuffle([...Array(reels).keys()]).slice(0, count);
+  for (const reel of scatterReels) {
+    grid[reel][Math.floor(Math.random() * rows)] = SCATTER;
+  }
+  return grid;
+}
+
 /** Ensure Barlow Condensed is ready before Pixi rasterizes any text with it. */
 async function loadFonts(): Promise<void> {
   if (!("fonts" in document)) return;
@@ -113,8 +158,17 @@ export class SlotScene {
   private sidePanel!: SidePanel;
   private freeSpinPanel!: FreeSpinPanel;
   private holdRespinPanel!: HoldRespinPanel;
+  private bloom!: Graphics;
   private autoTimer: number | null = null;
   private busy = false; // true while a spin animation is playing
+  /** True while a base spin's reels are landing (so the Free Spins panel is
+   *  held back until the anticipation cinematic and intro have played). */
+  private cinematicActive = false;
+  /** Full-screen bloom flash: elapsed ms, or -1 when idle. */
+  private bloomElapsed = -1;
+  /** Background brightness (1 = full) and the value we're easing toward. */
+  private bgBright = 1;
+  private bgBrightTarget = 1;
 
   constructor(game: Game) {
     this.game = game;
@@ -148,7 +202,48 @@ export class SlotScene {
       this.reels.update(ticker.deltaMS);
       this.hud.update(ticker.deltaMS);
       this.sidePanel.update(ticker.deltaMS);
+      this.updateBloom(ticker.deltaMS);
+      this.updateBackgroundDim(ticker.deltaMS);
     });
+  }
+
+  /** Ease the background brightness toward its target (anticipation focus). */
+  private updateBackgroundDim(dtMs: number): void {
+    if (this.bgBright === this.bgBrightTarget) return;
+    const step = Math.min(1, dtMs / ANTICIPATION.dimFadeMs);
+    this.bgBright += (this.bgBrightTarget - this.bgBright) * step;
+    if (Math.abs(this.bgBright - this.bgBrightTarget) < 0.004) this.bgBright = this.bgBrightTarget;
+    const v = Math.round(this.bgBright * 255);
+    this.background.tint = (v << 16) | (v << 8) | v;
+  }
+
+  /** Advance the bloom flash (0 → peak → half → 0 over its window). */
+  private updateBloom(dtMs: number): void {
+    if (this.bloomElapsed < 0) return;
+    this.bloomElapsed += dtMs;
+    const t = Math.min(1, this.bloomElapsed / ANTICIPATION.bloomMs);
+    const peak = ANTICIPATION.bloomPeak;
+    let alpha: number;
+    if (t < 0.3) alpha = peak * (t / 0.3);
+    else if (t < 0.6) alpha = peak * (1 - 0.5 * ((t - 0.3) / 0.3));
+    else alpha = peak * 0.5 * (1 - (t - 0.6) / 0.4);
+    this.bloom.alpha = alpha;
+    if (t >= 1) {
+      this.bloom.alpha = 0;
+      this.bloomElapsed = -1;
+    }
+  }
+
+  /** The effects the reels drive during the anticipation cinematic. */
+  private cinematicHooks(): CinematicHooks {
+    return {
+      dim: (active) => {
+        this.bgBrightTarget = active ? ANTICIPATION.dimBrightness : 1;
+      },
+      bloom: () => {
+        this.bloomElapsed = 0;
+      },
+    };
   }
 
   private build(): void {
@@ -191,21 +286,29 @@ export class SlotScene {
     this.hud.position.set(HUD_POS.x, HUD_POS.y);
 
     this.sidePanel = new SidePanel({
-      onBuyBonus: () => this.game.buyBonus(BUY_BONUS_TIER),
+      onBuyBonus: () => void this.playBuyBonus(),
       onToggleLuckBoost: () => this.game.setChance2x(!this.game.isChance2x),
     });
 
     this.freeSpinPanel = new FreeSpinPanel();
     this.holdRespinPanel = new HoldRespinPanel();
 
-    // background → backdrop → reels → frame → logo → side panels → bonus
-    // overlays → HUD
+    // Full-screen additive bloom flash for the Free Spins trigger / entry. Sits
+    // above the playfield but below the HUD so the controls stay crisp.
+    this.bloom = new Graphics().rect(0, 0, CANVAS.width, CANVAS.height).fill(0xffffff);
+    this.bloom.blendMode = "add";
+    this.bloom.alpha = 0;
+    this.bloom.eventMode = "none";
+
+    // background → backdrop → reels → frame → logo → bloom → side panels →
+    // bonus overlays → HUD
     stage.addChild(
       this.background,
       this.backdrop,
       this.reels,
       this.frame,
       logo,
+      this.bloom,
       this.sidePanel,
       this.freeSpinPanel,
       this.holdRespinPanel,
@@ -216,8 +319,11 @@ export class SlotScene {
   private subscribe(): void {
     const { events } = this.game;
 
-    events.on(GameEvent.ModeChange, ({ to }) => {
-      this.setBackground(to);
+    events.on(GameEvent.ModeChange, ({ from, to }) => {
+      // The base → Free Spins swap is owned by the cinematic (it happens after
+      // the reels land + the intro plays); every other transition flips now.
+      const deferToCinematic = from === GameMode.BASE && to === GameMode.FREE_SPINS;
+      if (!deferToCinematic) this.setBackground(to);
       this.refreshControls(); // entering/leaving a bonus mode flips the spin button immediately
       this.refreshFreeSpinOverlay();
       // Bonus modes show a running session total; the base game shows one spin.
@@ -232,7 +338,12 @@ export class SlotScene {
     // Reset the win meter per spin only in the base game; bonus modes keep the
     // accumulated session total (render() drives it up).
     events.on(GameEvent.SpinStart, () => {
-      if (this.game.currentMode === GameMode.BASE) this.hud.setWin(0);
+      if (this.game.currentMode === GameMode.BASE) {
+        this.hud.setWin(0);
+        // A base spin may trigger Free Spins; hold the overlay back until the
+        // cinematic + intro have played (set now, before the mode flips).
+        this.cinematicActive = true;
+      }
     });
     events.on(GameEvent.BalanceChange, ({ balance, reason }) => {
       // Snap on the initial load; otherwise ease (count up on a win, down on a bet).
@@ -279,7 +390,10 @@ export class SlotScene {
       const prizes = result.holdAndRespin
         ? [...result.prizes, ...trophyValueCells(result.holdAndRespin.locked, result.holdAndRespin.values)]
         : result.prizes;
-      await this.reels.spin(result.grid, prizes, this.game.betPerLine);
+      // Only base spins get the anticipation cinematic — pass the scene hooks so
+      // the reels can dim the background and bloom on the triggering Scatter.
+      const hooks = result.mode === GameMode.BASE ? this.cinematicHooks() : undefined;
+      await this.reels.spin(result.grid, prizes, this.game.betPerLine, hooks);
     }
 
     // Spin Results: animate the winning paylines.
@@ -299,6 +413,13 @@ export class SlotScene {
     // Base mode shows this spin's win; bonus modes show the running total of the
     // session (so it accumulates and never resets mid-feature).
     this.hud.setWin(sessionWin(result));
+
+    // A natural Scatter trigger: the reels have landed (and bloomed) — beat,
+    // then play the Free Spins intro before the overlay appears and auto-play
+    // begins. The mode already flipped in the engine; we just reveal it now.
+    if (result.triggeredFreeSpins) await this.playFreeSpinsEntry();
+
+    this.cinematicActive = false;
     this.busy = false;
     this.refreshControls();
     this.refreshFreeSpinOverlay();
@@ -306,6 +427,49 @@ export class SlotScene {
     // Auto-play bonus rounds until they finish (respects retriggers, which keep
     // the mode non-BASE by adding spins / resetting respins).
     if (this.game.currentMode !== GameMode.BASE) this.scheduleNextBonusSpin();
+  }
+
+  /** The Free Spins intro: a beat, then swap to the Free Spins backdrop with a
+   *  bloom flash. Shared by the natural trigger and the Buy Bonus cinematic. */
+  private async playFreeSpinsEntry(): Promise<void> {
+    await wait(ANTICIPATION.entryPauseMs);
+    this.setBackground(GameMode.FREE_SPINS);
+    this.bloomElapsed = 0;
+  }
+
+  /**
+   * Buy Bonus: play the same cinematic as a natural trigger over a fabricated
+   * board that lands the Scatters, then purchase the bonus for real and reveal
+   * Free Spins. Guaranteed outcome, so the anticipation always pays off.
+   */
+  private async playBuyBonus(): Promise<void> {
+    if (this.busy || this.game.currentMode !== GameMode.BASE) return;
+
+    // If it can't be afforded, let the engine emit the rejection (no cinematic).
+    const cost = bonusConfig.buyBonus[BUY_BONUS_TIER].costMultiplier * this.game.currentBet;
+    if (this.game.balance < cost) {
+      this.game.buyBonus(BUY_BONUS_TIER);
+      return;
+    }
+
+    this.busy = true;
+    this.cinematicActive = true;
+    this.refreshControls();
+    this.reels.clearWins();
+
+    await this.reels.spin(buyBonusBoard(), [], this.game.betPerLine, this.cinematicHooks());
+
+    // The reels have landed the Scatters — commit the purchase (enters Free
+    // Spins, kicks off auto-play) and play the shared intro.
+    await wait(ANTICIPATION.entryPauseMs);
+    this.game.buyBonus(BUY_BONUS_TIER);
+    this.setBackground(GameMode.FREE_SPINS);
+    this.bloomElapsed = 0;
+
+    this.cinematicActive = false;
+    this.busy = false;
+    this.refreshControls();
+    this.refreshFreeSpinOverlay();
   }
 
   private setBackground(mode: GameMode): void {
@@ -366,7 +530,9 @@ export class SlotScene {
     const inFreeSpins = s.mode === GameMode.FREE_SPINS && !!s.freeSpins;
     const inHoldRespin = s.mode === GameMode.HOLD_AND_RESPIN && !!s.holdAndRespin;
 
-    this.freeSpinPanel.visible = inFreeSpins;
+    // Held back during the entry cinematic so the panel doesn't pop in over the
+    // base reels before the intro plays.
+    this.freeSpinPanel.visible = inFreeSpins && !this.cinematicActive;
     if (s.freeSpins) {
       this.freeSpinPanel.setRemaining(s.freeSpins.remaining);
       this.freeSpinPanel.setWildCounter(s.freeSpins.wildCounter);

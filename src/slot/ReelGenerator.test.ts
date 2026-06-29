@@ -3,6 +3,11 @@ import { ReelGenerator } from './ReelGenerator';
 import { REEL_SETS } from '../config/reelStrips';
 import { createSeededRng } from '../core/rng';
 import { gameConfig } from '../config/gameConfig';
+import { bonusConfig } from '../config/bonusConfig';
+import { SCATTER } from '../config/symbols';
+
+const countScatters = (grid: string[][]) =>
+  grid.reduce((n, col) => n + col.filter((s) => s === SCATTER).length, 0);
 
 describe('ReelGenerator', () => {
   it('produces a reels x rows grid', () => {
@@ -23,5 +28,16 @@ describe('ReelGenerator', () => {
     expect(REEL_SETS.freeSpins.flat()).not.toContain('bonus'); // scatter
     expect(REEL_SETS.freeSpins.flat()).not.toContain('trophy');
     expect(REEL_SETS.holdAndRespin.flat()).toContain('trophy');
+  });
+
+  it('caps the scatter count on every generated board', () => {
+    const max = bonusConfig.freeSpins.maxScatters;
+    // Sweep many seeds across the scatter-bearing sets (base + the denser
+    // chance2x, which can roll 4–5 before the cap).
+    for (let seed = 0; seed < 300; seed++) {
+      const gen = new ReelGenerator(createSeededRng(seed));
+      expect(countScatters(gen.generate('base'))).toBeLessThanOrEqual(max);
+      expect(countScatters(gen.generate('chance2x'))).toBeLessThanOrEqual(max);
+    }
   });
 });

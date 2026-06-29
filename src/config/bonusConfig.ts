@@ -21,8 +21,14 @@ export const bonusConfig = {
 
   freeSpins: {
     /** Scatter count (in the base game) -> Free Spins awarded. */
-    scatterAwards: { 3: 10, 4: 15, 5: 20 } as Record<number, number>,
+    scatterAwards: { 3: 10 } as Record<number, number>,
     minScattersToTrigger: 3,
+    /**
+     * A board never shows more than this many Scatters — extra ones are removed
+     * during reel generation (see ReelGenerator). With the cap at the trigger
+     * count, 3 Scatters is the only tier.
+     */
+    maxScatters: 3,
     /** Final-tier multiplier when triggered by scatters (buys override per tier). */
     defaultFinalMultiplier: 10,
   },

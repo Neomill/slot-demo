@@ -17,12 +17,12 @@ function gridWith(symbol: SymbolId, count: number): SymbolId[][] {
 }
 
 describe('BonusManager', () => {
-  it('awards free spins by scatter (bonus) count, clamping to the top tier', () => {
+  it('awards free spins from the single 3-Scatter tier (the board caps at 3)', () => {
     expect(bm.scatterAward(2)).toBe(0);
     expect(bm.scatterAward(3)).toBe(10);
-    expect(bm.scatterAward(4)).toBe(15);
-    expect(bm.scatterAward(5)).toBe(20);
-    expect(bm.scatterAward(7)).toBe(20);
+    // The board can't show more than 3, but the award stays defined (clamped).
+    expect(bm.scatterAward(4)).toBe(10);
+    expect(bm.scatterAward(5)).toBe(10);
   });
 
   it('counts the scatter (bonus) and the hold-&-respin (trophy) symbols', () => {
