@@ -60,7 +60,7 @@ export const BACKDROP = {
 export const SEPARATOR = { width: 1, color: 0xf9ec7d };
 
 export const fontFamily =
-  'system-ui, -apple-system, "Segoe UI", Roboto, sans-serif';
+  "'Barlow Condensed', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif";
 export const colors = { text: 0xffffff, accent: 0xffd34d, lock: 0xffd34d };
 
 /**

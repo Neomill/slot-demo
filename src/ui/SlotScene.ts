@@ -21,7 +21,7 @@ import {
   colors,
 } from './theme';
 import { Reels } from './Reels';
-import { Hud } from './Hud';
+import { Hud } from './hud';
 
 // Pleasant resting board shown before the first spin.
 // Resting board: no prize horses here, so nothing shows a value before a spin.
@@ -46,6 +46,19 @@ function wildPositions(grid: SymbolId[][]): Position[] {
 
 /** Pause between auto-played bonus spins (free spins / hold & respin). */
 const BONUS_SPIN_DELAY = 700;
+
+/** Ensure Barlow Condensed is ready before Pixi rasterizes any text with it. */
+async function loadFonts(): Promise<void> {
+  if (!('fonts' in document)) return;
+  try {
+    await Promise.all([
+      document.fonts.load('600 16px "Barlow Condensed"'),
+      document.fonts.load('700 24px "Barlow Condensed"'),
+    ]);
+  } catch {
+    // Fall back to the system font if loading fails.
+  }
+}
 
 /**
  * The PixiJS view. Owns the renderer and on-screen pieces (background, reels,
@@ -79,6 +92,7 @@ export class SlotScene {
     container.appendChild(this.app.canvas);
 
     await Assets.load(ALL_ASSET_URLS);
+    await loadFonts();
 
     this.build();
     this.subscribe();
@@ -87,7 +101,10 @@ export class SlotScene {
     this.refreshControls();
     this.updateStatus();
 
-    this.app.ticker.add((ticker: Ticker) => this.reels.update(ticker.deltaMS));
+    this.app.ticker.add((ticker: Ticker) => {
+      this.reels.update(ticker.deltaMS);
+      this.hud.update(ticker.deltaMS);
+    });
   }
 
   private build(): void {
@@ -207,11 +224,12 @@ export class SlotScene {
     this.background.height = CANVAS.height;
   }
 
-  /** Spin is enabled only in the base game with enough balance. */
+  /** Controls are live only in the base game, when idle, with enough balance. */
   private refreshControls(): void {
-    const canSpin =
-      !this.busy && this.game.currentMode === GameMode.BASE && this.game.balance >= this.game.spinCost;
-    this.hud.setSpinEnabled(canSpin);
+    const idle = !this.busy && this.game.currentMode === GameMode.BASE;
+    this.hud.setSpinEnabled(idle && this.game.balance >= this.game.spinCost);
+    this.hud.setBetEnabled(idle);
+    this.hud.setTurboEnabled(idle);
   }
 
   /** Queue the next bonus spin if a bonus round is still running. */

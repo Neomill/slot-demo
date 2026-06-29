@@ -1,4 +1,8 @@
 import "./style.css";
+import "@fontsource/barlow-condensed/500.css";
+import "@fontsource/barlow-condensed/600.css";
+import "@fontsource/barlow-condensed/700.css";
+import "@fontsource/barlow-condensed/800.css";
 import { Game } from "./game/Game";
 import { SlotScene } from "./ui/SlotScene";
 

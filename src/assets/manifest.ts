@@ -26,6 +26,15 @@ import holdRespinBackground from './background/hold-spin-background.png';
 import frame from './frame.png';
 import logo from './logo.png';
 
+import controlLeftEdge from './game-control/control-left-edge.png';
+import controlCenter from './game-control/control-center.png';
+import controlRightEdge from './game-control/control-right-edge.png';
+import spinButton from './game-control/spin-button.png';
+import buttonMenu from './game-control/button-menu.png';
+import buttonAdd from './game-control/button-add.png';
+import buttonSubtract from './game-control/button-subtract.png';
+import buttonTurbo from './game-control/button-turbo.png';
+
 /** Symbol id -> texture URL. Keys line up 1:1 with the engine's SymbolId. */
 export const SYMBOL_TEXTURES: Record<SymbolId, string> = {
   ace,
@@ -55,10 +64,23 @@ export const BACKGROUNDS: Record<GameMode, string> = {
 export const FRAME = frame;
 export const LOGO = logo;
 
+/** Game controller (HUD) art. */
+export const CONTROL = {
+  leftEdge: controlLeftEdge,
+  center: controlCenter,
+  rightEdge: controlRightEdge,
+  spin: spinButton,
+  menu: buttonMenu,
+  add: buttonAdd,
+  subtract: buttonSubtract,
+  turbo: buttonTurbo,
+};
+
 /** Every asset URL, for preloading through pixi's Assets in one pass. */
 export const ALL_ASSET_URLS: string[] = [
   ...Object.values(SYMBOL_TEXTURES),
   ...Object.values(BACKGROUNDS),
+  ...Object.values(CONTROL),
   FRAME,
   LOGO,
 ];

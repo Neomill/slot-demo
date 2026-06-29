@@ -16,6 +16,8 @@
     "vitest": "^1.6.0"
   },
   "dependencies": {
+    "@fontsource/barlow-condensed": "^5.2.8",
+    "@fontsource/oswald": "^5.2.8",
     "pixi.js": "^8.19.0"
   }
 }
