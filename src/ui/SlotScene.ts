@@ -41,6 +41,8 @@ import { FreeSpinPanel } from "./FreeSpinPanel";
 import { FeatureBeam } from "./FeatureBeam";
 import { HoldRespinPanel } from "./HoldRespinPanel";
 import { WinCelebration } from "./WinCelebration";
+import { InfoModal } from "./InfoModal";
+import { INFO_MODAL_TABS } from "./infoModalContent";
 import { money } from "./hud/text";
 
 // Pleasant resting board shown before the first spin.
@@ -197,6 +199,7 @@ export class SlotScene {
   private freeSpinPanel!: FreeSpinPanel;
   private holdRespinPanel!: HoldRespinPanel;
   private winCelebration!: WinCelebration;
+  private infoModal!: InfoModal;
   private bloom!: Graphics;
   /** Darkens the reels while a Wild Charge beam travels (Phase 3 camera focus). */
   private featureDim!: Graphics;
@@ -346,9 +349,7 @@ export class SlotScene {
     this.hud = new Hud({
       onSpin: () => void this.game.spin(),
       onBet: (direction) => this.changeBet(direction),
-      // Turbo is inert for now (it used to toggle the removed Chance x2 feature).
-      onTurbo: () => {},
-      onMenu: () => console.info("[menu] not implemented yet"),
+      onInfo: () => this.infoModal.show(),
     });
     this.hud.position.set(HUD_POS.x, HUD_POS.y);
 
@@ -360,6 +361,14 @@ export class SlotScene {
     this.freeSpinPanel = new FreeSpinPanel();
     this.holdRespinPanel = new HoldRespinPanel();
     this.winCelebration = new WinCelebration();
+
+    this.infoModal = new InfoModal({
+      title: "Info / Paytable",
+      tabs: INFO_MODAL_TABS,
+      accentColor: 0xe3a53a,
+      screenWidth: CANVAS.width,
+      screenHeight: CANVAS.height,
+    });
 
     // Phase 3 camera focus: a dark plate over the frame/reels that fades in while
     // a Wild Charge beam travels, so the lit panel above reads as the focal point.
@@ -399,6 +408,7 @@ export class SlotScene {
       this.featureBeam,
       this.hud,
       this.winCelebration, // a modal — sits above everything, including the HUD
+      this.infoModal, // the Info / Paytable modal sits on top of all
     );
   }
 
@@ -712,7 +722,6 @@ export class SlotScene {
     const idle = !this.busy && this.game.currentMode === GameMode.BASE;
     this.hud.setSpinEnabled(idle && this.game.balance >= this.game.spinCost);
     this.hud.setBetEnabled(idle);
-    this.hud.setTurboEnabled(idle);
     this.sidePanel.setEnabled(idle);
     // A bonus round owns the screen — fade the side buttons to a locked-out look
     // (a brief base spin only disables input, it doesn't trigger the heavy look).

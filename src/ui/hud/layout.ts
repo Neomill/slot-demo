@@ -67,8 +67,8 @@ const betCx = leftZoneRight - betReach;
 
 /** Final, computed positions consumed by the Hud when it places components. */
 export const ANCHORS = {
-  menuX: 34, // button radius 32 → left edge ~2px inside the frame, ~6px gap to panel
-  turboX: W - 34,
+  // Info button sits in the right margin (radius 32 → ~2px inside the frame).
+  infoX: W - 34,
   balanceX: balanceCx,
   betX: betCx,
   // Divider centred in the gap between the balance value and the bet's minus.

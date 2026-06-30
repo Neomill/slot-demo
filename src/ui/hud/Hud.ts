@@ -12,8 +12,8 @@ import { money } from './text';
 export interface HudCallbacks {
   onSpin: () => void;
   onBet: (direction: 1 | -1) => void;
-  onTurbo: () => void;
-  onMenu: () => void;
+  /** Opens the Info / Paytable modal. */
+  onInfo: () => void;
 }
 
 /**
@@ -27,8 +27,7 @@ export class Hud extends Container {
   private readonly bet: BetControl;
   private readonly win: StatDisplay;
   private readonly spin: SpinButton;
-  private readonly menu: IconButton;
-  private readonly turbo: IconButton;
+  private readonly info: IconButton;
 
   // WIN counts up smoothly toward its target (driven by update()).
   private winShown = 0;
@@ -48,9 +47,6 @@ export class Hud extends Container {
 
     const panel = new ControlPanel(PANEL.x, PANEL.width);
 
-    this.menu = new IconButton({ texture: CONTROL.menu, diameter: BUTTON.diameter, onPress: callbacks.onMenu });
-    this.menu.position.set(ANCHORS.menuX, cy);
-
     this.balance = new StatDisplay('BALANCE', SLOT.balance);
     this.balance.position.set(ANCHORS.balanceX, cy);
 
@@ -67,11 +63,11 @@ export class Hud extends Container {
     this.win = new StatDisplay('WIN', SLOT.win);
     this.win.position.set(ANCHORS.winX, cy);
 
-    this.turbo = new IconButton({ texture: CONTROL.turbo, diameter: BUTTON.diameter, onPress: callbacks.onTurbo });
-    this.turbo.position.set(ANCHORS.turboX, cy);
+    this.info = new IconButton({ texture: CONTROL.info, diameter: BUTTON.diameter, onPress: callbacks.onInfo });
+    this.info.position.set(ANCHORS.infoX, cy);
 
     // Panel behind everything; spin on top so its hover scale never clips.
-    this.addChild(panel, this.menu, this.balance, divider, this.bet, this.win, this.turbo, this.spin);
+    this.addChild(panel, this.balance, divider, this.bet, this.win, this.info, this.spin);
   }
 
   /** Advance the WIN and BALANCE counters. Call once per frame with the delta (ms). */
@@ -124,19 +120,11 @@ export class Hud extends Container {
     this.win.setCaption(text);
   }
 
-  setTurbo(active: boolean): void {
-    this.turbo.setActive(active);
-  }
-
   setSpinEnabled(enabled: boolean): void {
     this.spin.setEnabled(enabled);
   }
 
   setBetEnabled(enabled: boolean): void {
     this.bet.setEnabled(enabled);
-  }
-
-  setTurboEnabled(enabled: boolean): void {
-    this.turbo.setEnabled(enabled);
   }
 }

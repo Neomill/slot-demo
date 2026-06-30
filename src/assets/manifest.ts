@@ -30,10 +30,9 @@ import controlLeftEdge from "./game-control/control-left-edge.png";
 import controlCenter from "./game-control/control-center.png";
 import controlRightEdge from "./game-control/control-right-edge.png";
 import spinButton from "./game-control/spin-button.png";
-import buttonMenu from "./game-control/button-menu.png";
+import buttonInfo from "./game-control/button-info.png";
 import buttonAdd from "./game-control/button-add.png";
 import buttonSubtract from "./game-control/button-subtract.png";
-import buttonTurbo from "./game-control/button-turbo.png";
 
 import buyBonus from "./buy-bunos.png";
 import buyHoldRespin from "./buy-hold-and-respin.png";
@@ -96,10 +95,9 @@ export const CONTROL = {
   center: controlCenter,
   rightEdge: controlRightEdge,
   spin: spinButton,
-  menu: buttonMenu,
+  info: buttonInfo,
   add: buttonAdd,
   subtract: buttonSubtract,
-  turbo: buttonTurbo,
 };
 
 /** Side call-to-action panels (left of the reels). */
