@@ -33,6 +33,8 @@ export class Hud extends Container {
   // WIN counts up smoothly toward its target (driven by update()).
   private winShown = 0;
   private winTarget = 0;
+  // A gentle 1 → 1.03 → 1 pulse on the WIN readout while it's counting up.
+  private winPulseT = 0;
 
   // BALANCE eases toward its target in both directions — up when it's credited,
   // down when a bet is placed (driven by update()).
@@ -74,10 +76,19 @@ export class Hud extends Container {
 
   /** Advance the WIN and BALANCE counters. Call once per frame with the delta (ms). */
   update(dtMs: number): void {
-    if (this.winShown !== this.winTarget) {
+    const counting = this.winShown !== this.winTarget;
+    if (counting) {
       this.winShown += (this.winTarget - this.winShown) * Math.min(1, dtMs / 220);
       if (Math.abs(this.winTarget - this.winShown) < 0.5) this.winShown = this.winTarget;
       this.win.setValue(money(this.winShown));
+    }
+    // Pulse the WIN readout while it climbs, then settle back to rest.
+    if (counting) {
+      this.winPulseT += dtMs;
+      this.win.scale.set(1 + 0.03 * Math.abs(Math.sin(this.winPulseT / 110)));
+    } else if (this.win.scale.x !== 1) {
+      const next = this.win.scale.x + (1 - this.win.scale.x) * Math.min(1, dtMs / 120);
+      this.win.scale.set(Math.abs(next - 1) < 0.002 ? 1 : next);
     }
     if (this.balanceShown !== this.balanceTarget) {
       this.balanceShown += (this.balanceTarget - this.balanceShown) * Math.min(1, dtMs / 220);

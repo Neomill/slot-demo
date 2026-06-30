@@ -32,6 +32,7 @@ import {
   REEL_ORIGIN,
 } from "./theme";
 import { Reels, type CinematicHooks } from "./Reels";
+import { winIntensity, winFxParams } from "./winFx";
 import { Hud } from "./hud";
 import { SidePanel } from "./SidePanel";
 import { FreeSpinPanel } from "./FreeSpinPanel";
@@ -396,9 +397,15 @@ export class SlotScene {
       await this.reels.spin(result.grid, prizes, this.game.betPerLine, hooks);
     }
 
-    // Spin Results: animate the winning paylines.
+    // Spin Results: present the winning paylines (focus → reveal → activation →
+    // finish), scaled by an intensity derived from the win vs. the stake. Big
+    // wins also flash the shared bloom (the scene owns it). See winFx + Reels.
     if (result.lineWins.length > 0) {
-      this.reels.showWins(result.lineWins.flatMap((win) => win.positions));
+      const intensity = winIntensity(result.totalWin, this.game.currentBet);
+      const params = winFxParams(intensity, result.mode);
+      await this.reels.playWinPresentation(result.lineWins, params, () => {
+        this.bloomElapsed = 0;
+      });
     }
 
     // Free spins: Wilds collect the prizes — detach the badges and fly them into the Wild.

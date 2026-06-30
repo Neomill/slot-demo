@@ -93,6 +93,61 @@ export const ANTICIPATION = {
 } as const;
 
 /**
+ * Win & Bonus FX system (see soundIdea.md → "SLOT WIN & BONUS FX SYSTEM").
+ *
+ * The presentation of a *winning* spin, scaled by an intensity (1–10). The
+ * design rule is "one emotion per moment": dim the board to focus the win
+ * (focus), trace the payline (reveal), pop the winning symbols one at a time
+ * (activation), then settle. Effects never stack — motion and dimming carry the
+ * hierarchy, not piled-on glow. Big extras (camera shake, full-screen bloom) are
+ * gated behind intensity thresholds so small wins stay calm.
+ *
+ * Every value here is presentation-only. winFx.ts turns an intensity into a
+ * scaled `WinFxParams`; Reels.playWinPresentation renders it. Tune freely.
+ */
+export const WIN_FX = {
+  // STEP 1 — Focus: desaturate + darken the non-winning symbols. Saturate is a
+  // ColorMatrix amount (0 = unchanged, -1 = greyscale); -0.6 ≈ 0.4 saturation.
+  focusInMs: 100,
+  focusOutMs: 220,
+  dimSaturate: -0.6,
+  dimBrightness: 0.7,
+  // Free Spins keeps the focus much lighter (the mode is already a reward flow).
+  fsDimSaturate: -0.3,
+  fsDimBrightness: 0.86,
+
+  // STEP 2 — Payline reveal: a thin amber line traced left → right along the win.
+  lineColor: 0xffcc66,
+  lineAlpha: 0.6,
+  lineWidthMin: 2,
+  lineWidthMax: 3,
+  lineDrawMs: 300,
+
+  // STEP 3 — Symbol activation: a sequential pop (scale + lift) with a soft inner
+  // glow and a single shimmer sweep. Scales/lift grow with intensity.
+  popScaleMin: 1.06,
+  popScaleMax: 1.12,
+  liftMin: 3, // px
+  liftMax: 7,
+  activationMs: 360,
+  stepMs: 120, // stagger between consecutive symbols
+  shimmerMs: 150,
+  glowAlphaMin: 0.3,
+  glowAlphaMax: 0.6,
+
+  // Gated "big moment" extras (never on small/normal wins).
+  bigFxIntensity: 6, // camera shake at/above this
+  bloomIntensity: 8, // full-screen bloom flash at/above this
+  shakeAmp: 3, // px
+  shakeHz: 18,
+  shakeMs: 320,
+
+  // STEP 5 — Finish: hold the lit win, then restore. Hold grows with intensity.
+  holdMinMs: 380,
+  holdMaxMs: 520,
+} as const;
+
+/**
  * The dark panel behind the reels. By default it matches the reel grid exactly;
  * use paddingX/paddingY to grow (or, with negatives, shrink) it on each side.
  */
