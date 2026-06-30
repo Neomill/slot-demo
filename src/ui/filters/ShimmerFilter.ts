@@ -1,4 +1,4 @@
-import { Filter, GlProgram, GpuProgram } from 'pixi.js';
+import { Filter, GlProgram, GpuProgram } from "pixi.js";
 
 interface ShimmerUniforms {
   uProgress: number;
@@ -8,23 +8,11 @@ interface ShimmerUniforms {
 }
 
 /**
- * A single shimmer pass (see soundIdea.md → STEP 3 "single shimmer pass").
- *
+ * A single shimmer pass
  * A custom GPU filter that sweeps a soft diagonal highlight band across whatever
- * it's applied to. It rides the symbol art (the band only brightens opaque
- * pixels), so a winning symbol gets a quick metallic glint without an outline or
- * a separate overlay sprite. Drive `progress` 0 → 1 once per activation to play
- * the sweep, then detach the filter.
- *
- * Programs are provided for both backends: GLSL for WebGL (this project's
- * renderer) and WGSL for WebGPU, so the effect is portable either way.
+ * it's applied to.
  */
-
 const gl = {
-  // No `#version` directive and individual (non-block) uniforms: this is Pixi's
-  // WebGL filter convention (cf. the built-in AlphaFilter). Pixi adds the
-  // version/precision header and `in`/`out`/`texture` compat defines itself, and
-  // syncs the uniform-group values to these uniforms by name.
   vertex: /* glsl */ `
     in vec2 aPosition;
     out vec2 vTextureCoord;
@@ -141,18 +129,22 @@ const gpu = {
 export class ShimmerFilter extends Filter {
   constructor() {
     super({
-      glProgram: GlProgram.from({ vertex: gl.vertex, fragment: gl.fragment, name: 'shimmer' }),
+      glProgram: GlProgram.from({
+        vertex: gl.vertex,
+        fragment: gl.fragment,
+        name: "shimmer",
+      }),
       gpuProgram: GpuProgram.from({
-        vertex: { source: gpu.vertex, entryPoint: 'mainVertex' },
-        fragment: { source: gpu.fragment, entryPoint: 'mainFragment' },
-        name: 'shimmer',
+        vertex: { source: gpu.vertex, entryPoint: "mainVertex" },
+        fragment: { source: gpu.fragment, entryPoint: "mainFragment" },
+        name: "shimmer",
       }),
       resources: {
         shimmerUniforms: {
-          uProgress: { value: 0, type: 'f32' },
-          uWidth: { value: 0.16, type: 'f32' },
-          uAngle: { value: -0.6, type: 'f32' }, // radians; a top-left → bottom-right glint
-          uStrength: { value: 0.85, type: 'f32' },
+          uProgress: { value: 0, type: "f32" },
+          uWidth: { value: 0.16, type: "f32" },
+          uAngle: { value: -0.6, type: "f32" }, // radians; a top-left → bottom-right glint
+          uStrength: { value: 0.85, type: "f32" },
         },
       },
       // The sweep band overruns the symbol's edges slightly; pad so it isn't clipped.
@@ -161,7 +153,9 @@ export class ShimmerFilter extends Filter {
   }
 
   private get uniforms(): ShimmerUniforms {
-    return (this.resources.shimmerUniforms as unknown as { uniforms: ShimmerUniforms }).uniforms;
+    return (
+      this.resources.shimmerUniforms as unknown as { uniforms: ShimmerUniforms }
+    ).uniforms;
   }
 
   /** Sweep position, 0 (off the leading edge) → 1 (off the trailing edge). */

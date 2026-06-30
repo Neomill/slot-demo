@@ -37,6 +37,31 @@ import buttonSubtract from "./game-control/button-subtract.png";
 import buyBonus from "./buy-bunos.png";
 import buyHoldRespin from "./buy-hold-and-respin.png";
 
+import infoPanelTop from "./info-modal/top-info-panel.png";
+import infoPanelCenter from "./info-modal/center-info-panel.png";
+import infoPanelBottom from "./info-modal/bottom-info-panel.png";
+import infoClose from "./info-modal/button-close.png";
+import infoTitle from "./info-modal/info.png";
+import infoTabPays from "./info-modal/pays.png";
+import infoTabPayline from "./info-modal/payline.png";
+import infoTabRules from "./info-modal/rules.png";
+
+import payline1 from "./info-modal/paylines/payline-1.png";
+import payline2 from "./info-modal/paylines/payline-2.png";
+import payline3 from "./info-modal/paylines/payline-3.png";
+import payline4 from "./info-modal/paylines/payline-4.png";
+import payline5 from "./info-modal/paylines/payline-5.png";
+import payline6 from "./info-modal/paylines/payline-6.png";
+import payline7 from "./info-modal/paylines/payline-7.png";
+import payline8 from "./info-modal/paylines/payline-8.png";
+import payline9 from "./info-modal/paylines/payline-9.png";
+import payline10 from "./info-modal/paylines/payline-10.png";
+import payline11 from "./info-modal/paylines/payline-11.png";
+import payline12 from "./info-modal/paylines/payline-12.png";
+import payline13 from "./info-modal/paylines/payline-13.png";
+import payline14 from "./info-modal/paylines/payline-14.png";
+import payline15 from "./info-modal/paylines/payline-15.png";
+
 import bigWin from "./win-display/big-win.png";
 import megaWin from "./win-display/mega-win.png";
 import epicWin from "./win-display/epic-win.png";
@@ -107,6 +132,45 @@ export const SIDE = {
 };
 
 /**
+ * Info / Paytable modal art: a vertical 3-slice frame (rounded top, stretchable
+ * centre, rounded bottom — all sharing the gold side borders) plus the round
+ * close button. The centre slice stretches to whatever height the modal needs.
+ */
+export const INFO_PANEL = {
+  top: infoPanelTop,
+  center: infoPanelCenter,
+  bottom: infoPanelBottom,
+  close: infoClose,
+  title: infoTitle,
+};
+
+/** Gold word-mark art for the Info modal's tabs (shown in place of text labels). */
+export const INFO_TABS = {
+  pays: infoTabPays,
+  payline: infoTabPayline,
+  rules: infoTabRules,
+};
+
+/** The 25-line diagram art (payline 1–15), shown as a grid in the Payline tab. */
+export const INFO_PAYLINES: string[] = [
+  payline1,
+  payline2,
+  payline3,
+  payline4,
+  payline5,
+  payline6,
+  payline7,
+  payline8,
+  payline9,
+  payline10,
+  payline11,
+  payline12,
+  payline13,
+  payline14,
+  payline15,
+];
+
+/**
  * Free Spins overlay art (shown above the reels during Free Spins): the large
  * remaining-spins counter, the three small multiplier panels, the wild
  * lock/unlock pips, and the 0–9 digit glyphs for the counter.
@@ -153,6 +217,9 @@ export const ALL_ASSET_URLS: string[] = [
   ...Object.values(BACKGROUNDS),
   ...Object.values(CONTROL),
   ...Object.values(SIDE),
+  ...Object.values(INFO_PANEL),
+  ...Object.values(INFO_TABS),
+  ...INFO_PAYLINES,
   ...Object.values(FREE_SPIN).flat(),
   ...Object.values(WIN_DISPLAY.tiers),
   WIN_DISPLAY.amountLeft,

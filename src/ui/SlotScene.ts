@@ -19,6 +19,7 @@ import {
   BACKGROUNDS,
   FRAME as FRAME_TEXTURE,
   LOGO,
+  INFO_PANEL,
   ALL_ASSET_URLS,
 } from "../assets/manifest";
 import {
@@ -383,6 +384,7 @@ export class SlotScene {
 
     this.infoModal = new InfoModal({
       title: "Info / Paytable",
+      titleIcon: INFO_PANEL.title,
       tabs: INFO_MODAL_TABS,
       accentColor: 0xe3a53a,
       screenWidth: CANVAS.width,

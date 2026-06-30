@@ -1,8 +1,7 @@
-import { bonusConfig, type BuyBonusTier } from '../config/bonusConfig';
+import { bonusConfig, type BuyBonusTier } from "../config/bonusConfig";
 
 /**
- * Prices Buy Bonus purchases and reports the Free Spins session parameters for
- * each tier. Stateless — the engine performs the debit and starts the session.
+ * Prices Buy Bonus purchases and reports the Free Spins session parameters
  */
 export class BuyBonusManager {
   cost(tier: BuyBonusTier, currentBet: number): number {

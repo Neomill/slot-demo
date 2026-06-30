@@ -1,26 +1,38 @@
 import {
-  BlurFilter,
+  Assets,
+  ColorMatrixFilter,
   Container,
   Graphics,
   Rectangle,
+  Sprite,
   Text,
   TextStyle,
   Ticker,
+  type Texture,
   type FederatedPointerEvent,
   type FederatedWheelEvent,
 } from "pixi.js";
 import { fontFamily } from "./theme";
+import { INFO_PANEL } from "../assets/manifest";
 
 export interface InfoModalTab {
   label: string;
-  /** Body text (word-wrapped) or a ready-made display object to drop in. */
-  content: string | Container;
+  /** Optional word-mark image (asset URL) shown instead of the text label. */
+  icon?: string;
+  /**
+   * Body text (word-wrapped), a ready-made display object, or a factory that
+   * builds one given the content width (in px) — used for layouts that must fit
+   * the viewport, like the payline grid.
+   */
+  content: string | Container | ((width: number) => Container);
 }
 
 export interface InfoModalOptions {
   width?: number;
   height?: number;
   title?: string;
+  /** Optional word-mark image (asset URL) shown instead of the title text. */
+  titleIcon?: string;
   tabs: InfoModalTab[];
   /** Accent used for the active tab + highlights. */
   accentColor?: number;
@@ -32,20 +44,22 @@ export interface InfoModalOptions {
 }
 
 // --- palette ---------------------------------------------------------------
-const DEFAULT_ACCENT = 0xe3a53a; // warm gold for the active tab
-const COL_SHADOW = 0x000000;
-const COL_FRAME = 0x241a10; // dark bronze outer frame
-const COL_GOLD = 0xc9a24e; // gold border
-const COL_GOLD_BRIGHT = 0xead08a; // bevel highlight
-const COL_PANEL = 0x182233; // inner panel (dark navy)
-const COL_PANEL_TOP = 0x213048; // panel sheen (top)
-const COL_CONTENT = 0x1b2433; // content area
-const COL_TAB_IDLE = 0x2b2f38;
-const COL_TAB_TEXT_IDLE = 0xd8c38f;
+const DEFAULT_ACCENT = 0xe3a53a; // warm gold for the active tab / scrollbar
+const COL_SHADOW = 0x000000; // full-screen scrim
+const COL_TAB_TEXT_IDLE = 0xd8c38f; // text-tab fallback (no icon)
 const COL_WHITE = 0xffffff;
 const COL_BODY = 0xc9d6e6;
 const COL_TITLE = 0xf3d27a;
 const OVERLAY_ALPHA = 0.65;
+
+// Inactive image tabs are desaturated + darkened (but kept fully opaque); these
+// feed a ColorMatrixFilter whose alpha blends 0 (active, full colour) → 1 (dull).
+const TAB_DULL_SATURATE = -0.55;
+const TAB_DULL_BRIGHTNESS = 0.5;
+/** Fraction of the tab cell the word-mark fills (lower = smaller title). */
+const TAB_ICON_FILL = 0.72;
+/** On-screen height (px) of the title word-mark image. */
+const TITLE_ICON_HEIGHT = 36;
 
 // --- easing -----------------------------------------------------------------
 type Easing = (t: number) => number;
@@ -84,8 +98,12 @@ interface Anim {
 
 interface Tab {
   container: Container;
-  bg: Graphics;
-  label: Text;
+  /** Image tabs: the word-mark sprite + the dull filter blended by state. */
+  sprite?: Sprite;
+  dull?: ColorMatrixFilter;
+  baseScale: number; // image's fit-to-cell scale (sprite tabs only)
+  /** Text fallback (tabs declared without an icon). */
+  label?: Text;
   width: number;
   height: number;
   colorT: number; // 0 = idle … 1 = active
@@ -95,24 +113,25 @@ interface Tab {
 }
 
 /**
- * A reusable, procedurally-drawn "INFO / PAYTABLE" modal: a full-screen scrim,
- * a gold-framed dark-navy panel with a title, a circular close button, a row of
- * capsule tabs, and a scrollable content area. Everything is PixiJS Graphics +
- * Text (no HTML, no image assets). Self-driven — it animates off Pixi's shared
- * ticker, so callers only need show() / hide(); nothing per-frame.
+ * A reusable "INFO / PAYTABLE" modal: a full-screen scrim, a gold-framed panel
+ * built from a vertical 3-slice image (rounded top + stretchable centre +
+ * rounded bottom), a title, an image close button, a row of capsule tabs, and a
+ * scrollable content area (text only — no inner background plate). Self-driven —
+ * it animates off Pixi's shared ticker, so callers only need show() / hide().
  *
  * API: show(), hide(), setActiveTab(i), resize(w, h), destroy().
  */
 export class InfoModal extends Container {
-  private readonly opts: Required<Omit<InfoModalOptions, "onClose">> &
-    Pick<InfoModalOptions, "onClose">;
+  private readonly opts: Required<
+    Omit<InfoModalOptions, "onClose" | "titleIcon">
+  > &
+    Pick<InfoModalOptions, "onClose" | "titleIcon">;
   private readonly W: number;
   private readonly H: number;
   private readonly accent: number;
 
   private readonly overlay: Graphics;
   private readonly modal: Container;
-  private closeBg!: Graphics;
   private readonly tabs: Tab[] = [];
 
   private viewport!: Container;
@@ -149,6 +168,7 @@ export class InfoModal extends Container {
       accentColor: options.accentColor ?? DEFAULT_ACCENT,
       screenWidth: options.screenWidth ?? 1920,
       screenHeight: options.screenHeight ?? 1080,
+      titleIcon: options.titleIcon,
       onClose: options.onClose,
     };
     this.W = this.opts.width;
@@ -240,50 +260,43 @@ export class InfoModal extends Container {
   private buildFrame(): void {
     const { W, H } = this;
 
-    // Soft drop shadow behind the whole panel.
-    const shadow = new Graphics()
-      .roundRect(-10, -6, W + 20, H + 28, 26)
-      .fill({ color: COL_SHADOW });
-    shadow.alpha = 0.5;
-    shadow.filters = [new BlurFilter({ strength: 18, quality: 3 })];
+    // Vertical 3-slice: fit each slice to the modal width, keep the top/bottom
+    // caps at their natural (scaled) height, and stretch the centre to fill the
+    // gap — so the framed panel matches whatever W/H the modal is given.
+    const top = new Sprite(Assets.get<Texture>(INFO_PANEL.top));
+    const capH = (top.texture.height / top.texture.width) * W;
 
-    // Outer bronze frame + gold border + a thin bright bevel just inside it.
-    const outer = new Graphics()
-      .roundRect(0, 0, W, H, 16)
-      .fill({ color: COL_FRAME })
-      .roundRect(0, 0, W, H, 16)
-      .stroke({ width: 3, color: COL_GOLD })
-      .roundRect(3.5, 3.5, W - 7, H - 7, 13)
-      .stroke({ width: 1, color: COL_GOLD_BRIGHT, alpha: 0.5 });
-    outer.eventMode = "static"; // absorb taps so they don't reach the overlay
+    top.width = W;
+    top.height = capH;
+    top.position.set(0, 0);
 
-    // Inner navy panel with a thin gold edge.
-    const inset = 12;
-    const ipW = W - inset * 2;
-    const ipH = H - inset * 2;
-    const inner = new Graphics()
-      .roundRect(inset, inset, ipW, ipH, 11)
-      .fill({ color: COL_PANEL })
-      .roundRect(inset, inset, ipW, ipH, 11)
-      .stroke({ width: 1.5, color: 0xb99543, alpha: 0.9 });
-    inner.eventMode = "static";
+    const bottom = new Sprite(Assets.get<Texture>(INFO_PANEL.bottom));
+    bottom.width = W;
+    bottom.height = capH;
+    bottom.position.set(0, H - capH);
 
-    // Fake top-down gradient: a soft lighter sheen over the upper panel.
-    const sheen = new Graphics()
-      .roundRect(inset + 4, inset + 4, ipW - 8, ipH * 0.5, 11)
-      .fill({ color: COL_PANEL_TOP, alpha: 0.45 });
-    sheen.filters = [new BlurFilter({ strength: 24, quality: 2 })];
+    const center = new Sprite(Assets.get<Texture>(INFO_PANEL.center));
+    center.width = W;
+    center.height = Math.max(0, H - capH * 2);
+    center.position.set(0, capH);
 
-    // Inner glow — a blurred cool stroke hugging the panel edge.
-    const glow = new Graphics()
-      .roundRect(inset + 2, inset + 2, ipW - 4, ipH - 4, 11)
-      .stroke({ width: 6, color: 0x3a5b86, alpha: 0.55 });
-    glow.filters = [new BlurFilter({ strength: 9, quality: 2 })];
+    // Absorb taps anywhere on the panel so they don't reach the close-on-tap scrim.
+    for (const slice of [center, top, bottom]) slice.eventMode = "static";
 
-    this.modal.addChild(shadow, outer, inner, sheen, glow);
+    this.modal.addChild(center, top, bottom);
   }
 
   private buildTitle(): void {
+    // Prefer the word-mark image; fall back to text when no icon is supplied.
+    if (this.opts.titleIcon) {
+      const sprite = new Sprite(Assets.get<Texture>(this.opts.titleIcon));
+      sprite.anchor.set(0.5);
+      sprite.scale.set(TITLE_ICON_HEIGHT / sprite.texture.height);
+      sprite.position.set(this.W / 2, 40);
+      this.modal.addChild(sprite);
+      return;
+    }
+
     const title = new Text({
       text: this.opts.title.toUpperCase(),
       style: new TextStyle({
@@ -301,27 +314,16 @@ export class InfoModal extends Container {
   }
 
   private buildCloseButton(): void {
-    const btn = new Container();
-    btn.position.set(this.W - 34, 34);
+    const size = 40;
+    const btn = new Sprite(Assets.get<Texture>(INFO_PANEL.close));
+    btn.anchor.set(0.5);
+    const baseScale = size / btn.texture.width;
+    btn.scale.set(baseScale);
+    btn.position.set(this.W - 30, 30);
     btn.eventMode = "static";
     btn.cursor = "pointer";
 
-    const bg = new Graphics();
-    const x = new Text({
-      text: "✕",
-      style: new TextStyle({
-        fill: COL_GOLD_BRIGHT,
-        fontFamily,
-        fontSize: 22,
-        fontWeight: "700",
-      }),
-    });
-    x.anchor.set(0.5);
-    btn.addChild(bg, x);
-
-    this.closeBg = bg;
-    this.drawCloseButton(0);
-
+    // Gentle grow on hover (the only state change — the art carries the look).
     let hover = 0;
     let hoverAnim: number | undefined;
     const toward = (target: number): void => {
@@ -329,7 +331,7 @@ export class InfoModal extends Container {
       const from = hover;
       hoverAnim = this.animate(140, easeOutCubic, (t) => {
         hover = from + (target - from) * t;
-        this.drawCloseButton(hover);
+        btn.scale.set(baseScale * (1 + 0.12 * hover));
       });
     };
     btn.on("pointerover", () => toward(1));
@@ -337,18 +339,6 @@ export class InfoModal extends Container {
     btn.on("pointertap", () => this.close());
 
     this.modal.addChild(btn);
-  }
-
-  private drawCloseButton(hover: number): void {
-    const r = 17;
-    const fill = lerpColor(0x3a2a16, 0x5a4220, hover);
-    const border = lerpColor(COL_GOLD, COL_GOLD_BRIGHT, hover);
-    this.closeBg
-      .clear()
-      .circle(0, 0, r)
-      .fill({ color: fill })
-      .circle(0, 0, r)
-      .stroke({ width: 2, color: border });
   }
 
   private buildTabs(): void {
@@ -365,23 +355,11 @@ export class InfoModal extends Container {
       container.position.set(sidePad + i * (w + gap), y);
       container.eventMode = "static";
       container.cursor = "pointer";
+      container.hitArea = new Rectangle(0, 0, w, h); // whole cell clickable
 
-      const bg = new Graphics();
-      const label = new Text({
-        text: def.label.toUpperCase(),
-        style: new TextStyle({
-          fill: COL_TAB_TEXT_IDLE,
-          fontFamily,
-          fontSize: 20,
-          fontWeight: "700",
-          letterSpacing: 1,
-        }),
-      });
-      label.anchor.set(0.5);
-      label.position.set(w / 2, h / 2);
-      container.addChild(bg, label);
-
-      const tab: Tab = { container, bg, label, width: w, height: h, colorT: 0, hover: 0 };
+      const tab = def.icon
+        ? this.makeImageTab(container, def.icon, w, h)
+        : this.makeTextTab(container, def.label, w, h);
       this.drawTab(tab);
 
       container.on("pointerover", () => this.tweenHover(tab, 1));
@@ -393,19 +371,82 @@ export class InfoModal extends Container {
     });
   }
 
+  /** A tab shown as a gold word-mark image (no pill — its brightness is the state). */
+  private makeImageTab(
+    container: Container,
+    icon: string,
+    w: number,
+    h: number,
+  ): Tab {
+    const sprite = new Sprite(Assets.get<Texture>(icon));
+    sprite.anchor.set(0.5);
+    sprite.position.set(w / 2, h / 2);
+    // Contain the word-mark within the cell (aspect-preserved), then shrink a
+    // little so it doesn't fill the whole tab.
+    const baseScale =
+      Math.min(w / sprite.texture.width, h / sprite.texture.height) *
+      TAB_ICON_FILL;
+    sprite.scale.set(baseScale);
+
+    // Desaturate + darken when inactive; alpha (set in drawTab) blends the look in.
+    const dull = new ColorMatrixFilter();
+    dull.saturate(TAB_DULL_SATURATE, false);
+    dull.brightness(TAB_DULL_BRIGHTNESS, true);
+    sprite.filters = [dull];
+
+    container.addChild(sprite);
+    return {
+      container,
+      sprite,
+      dull,
+      baseScale,
+      width: w,
+      height: h,
+      colorT: 0,
+      hover: 0,
+    };
+  }
+
+  /** Text fallback for tabs declared without an icon (recoloured by state). */
+  private makeTextTab(
+    container: Container,
+    label: string,
+    w: number,
+    h: number,
+  ): Tab {
+    const text = new Text({
+      text: label.toUpperCase(),
+      style: new TextStyle({
+        fill: COL_TAB_TEXT_IDLE,
+        fontFamily,
+        fontSize: 20,
+        fontWeight: "700",
+        letterSpacing: 1,
+      }),
+    });
+    text.anchor.set(0.5);
+    text.position.set(w / 2, h / 2);
+    container.addChild(text);
+    return {
+      container,
+      label: text,
+      baseScale: 1,
+      width: w,
+      height: h,
+      colorT: 0,
+      hover: 0,
+    };
+  }
+
   private drawTab(tab: Tab): void {
-    const base = lerpColor(COL_TAB_IDLE, this.accent, tab.colorT);
-    const fill = lerpColor(base, COL_WHITE, tab.hover * 0.12);
-    tab.bg
-      .clear()
-      .roundRect(0, 0, tab.width, tab.height, tab.height / 2)
-      .fill({ color: fill });
-    if (tab.colorT > 0.01) {
-      tab.bg
-        .roundRect(0, 0, tab.width, tab.height, tab.height / 2)
-        .stroke({ width: 1.5, color: COL_GOLD_BRIGHT, alpha: 0.6 * tab.colorT });
+    // How "lit" the tab reads: active = full; inactive lifts a little on hover.
+    const lit = Math.min(1, tab.colorT + tab.hover * (1 - tab.colorT) * 0.5);
+    if (tab.dull && tab.sprite) {
+      tab.dull.alpha = 1 - lit; // 0 = full colour (active), 1 = dull (inactive)
+      tab.sprite.scale.set(tab.baseScale * (1 + 0.04 * tab.hover));
+    } else if (tab.label) {
+      tab.label.style.fill = lerpColor(COL_TAB_TEXT_IDLE, COL_WHITE, lit);
     }
-    tab.label.style.fill = lerpColor(COL_TAB_TEXT_IDLE, COL_WHITE, tab.colorT);
   }
 
   private tweenHover(tab: Tab, target: number): void {
@@ -427,12 +468,9 @@ export class InfoModal extends Container {
     const ch = this.H - top - bottom;
     const pad = 24;
 
-    // Content plate.
-    const plate = new Graphics()
-      .roundRect(cx, cy, cw, ch, 12)
-      .fill({ color: COL_CONTENT })
-      .roundRect(cx, cy, cw, ch, 12)
-      .stroke({ width: 1.5, color: 0xb99543, alpha: 0.85 });
+    // No content background — the text sits directly on the panel art. This
+    // invisible plate only captures wheel/drag scrolling over the content area.
+    const plate = new Graphics();
     plate.eventMode = "static";
     this.modal.addChild(plate);
 
@@ -488,8 +526,13 @@ export class InfoModal extends Container {
     this.modal.addChild(this.scrollbar);
   }
 
-  /** Wrap a string into a body Text, or pass through a ready-made container. */
-  private makeContentNode(content: string | Container): Container {
+  /**
+   * Resolve a tab's content into a display node: a ready-made container, the
+   * result of a factory (given the viewport width, e.g. the payline grid), or a
+   * word-wrapped body Text built from a string.
+   */
+  private makeContentNode(content: InfoModalTab["content"]): Container {
+    if (typeof content === "function") return content(this.vpWidth);
     if (content instanceof Container) return content;
     const wrap = new Container();
     const body = new Text({
