@@ -44,6 +44,7 @@ import { WinCelebration } from "./WinCelebration";
 import { InfoModal } from "./InfoModal";
 import { INFO_MODAL_TABS } from "./infoModalContent";
 import { money } from "./hud/text";
+import { sound } from "../audio/sound";
 
 // Pleasant resting board shown before the first spin.
 // Resting board: no prize horses here, so nothing shows a value before a spin.
@@ -80,6 +81,16 @@ function trophyValueCells(
     }
   }
   return cells;
+}
+
+/** True if any cell is locked in `after` that wasn't locked in `before` (a fresh trophy). */
+function hasNewLock(before: boolean[][], after: boolean[][]): boolean {
+  for (let reel = 0; reel < after.length; reel++) {
+    for (let row = 0; row < after[reel].length; row++) {
+      if (after[reel][row] && !before[reel]?.[row]) return true;
+    }
+  }
+  return false;
 }
 
 /** The win to show on the HUD: the running session total in a bonus, else this spin's. */
@@ -242,6 +253,7 @@ export class SlotScene {
 
     await Assets.load(ALL_ASSET_URLS);
     await loadFonts();
+    await sound.load();
 
     this.build();
     this.subscribe();
@@ -250,6 +262,9 @@ export class SlotScene {
     this.updateSidePanelCosts();
     this.refreshControls();
     this.refreshFreeSpinOverlay();
+    // Base game music loops from the start (begins once the context unlocks on
+    // the first user gesture); switched per game stage on ModeChange.
+    sound.playMusic("base-background");
 
     this.app.ticker.add((ticker: Ticker) => {
       this.reels.update(ticker.deltaMS);
@@ -347,7 +362,11 @@ export class SlotScene {
     logo.position.set(CANVAS.width / 2, 20);
 
     this.hud = new Hud({
-      onSpin: () => void this.game.spin(),
+      onSpin: () => {
+        sound.resume(); // first click also unlocks the audio context
+        sound.play("spin-click");
+        void this.game.spin();
+      },
       onBet: (direction) => this.changeBet(direction),
       onInfo: () => this.infoModal.show(),
     });
@@ -416,6 +435,9 @@ export class SlotScene {
     const { events } = this.game;
 
     events.on(GameEvent.ModeChange, ({ from, to }) => {
+      // Background music follows the game stage: the base loop in base play, the
+      // bonus loop during Free Spins and Hold & Respin (both share it).
+      sound.playMusic(to === GameMode.BASE ? "base-background" : "bonus-background");
       // Leaving Free Spins: tear down any in-flight charge beam and lift the dim.
       if (from === GameMode.FREE_SPINS) {
         this.featureBeam.clear();
@@ -512,6 +534,8 @@ export class SlotScene {
         trophyPrizes,
         this.game.betPerLine,
       );
+      // A new trophy locked into place this respin — play its lock-in cue.
+      if (hasNewLock(lockedBefore, locked)) sound.play("hold-and-respin-lock");
       // Reels (and any new trophy) have landed — settle to the engine's count.
       // When the count went back UP (a new trophy locked, or a win refilled it)
       // the panel plays the "Golden Rewind" reset; otherwise it just ticks.
@@ -542,8 +566,15 @@ export class SlotScene {
       // feature's respins begin.
       if (result.holdAndRespin && result.mode === GameMode.BASE) {
         this.bloomElapsed = 0;
+        sound.play("hold-and-respin-lock"); // the trophies lock in on the trigger
         await this.reels.playTrophyFreeze(result.holdAndRespin.locked);
       }
+    }
+
+    // A Wild has landed on the reels (Free Spins only) — sound its arrival.
+    if (result.mode === GameMode.FREE_SPINS && (result.wildsCollected ?? 0) > 0) {
+      sound.play("free-spin-award");
+      sound.play("wild-appers");
     }
 
     // Spin Results: present the winning paylines (focus → reveal → activation →
@@ -560,6 +591,7 @@ export class SlotScene {
     // Free spins: Wilds collect the prizes — detach the badges and fly them into
     // the Wild (Phase 1, the Wild absorbing the gold energy).
     if (result.mode === GameMode.FREE_SPINS && (result.collectWin ?? 0) > 0) {
+      sound.play("collect-horse-points"); // Wild starts collecting the prize values
       await this.reels.collectIntoWild(
         result.prizes,
         wildPositions(result.grid),
@@ -640,6 +672,7 @@ export class SlotScene {
         this.game.getState().freeSpins?.remaining ?? award.added;
       const fromValue = remaining - award.added;
       await this.freeSpinPanel.playPanelActivation(award.panelIndex);
+      sound.play("wild-send-money-to-panel"); // orbs fly from the panel to the counter
       await this.freeSpinPanel.transferToCounter(
         award.panelIndex,
         fromValue,

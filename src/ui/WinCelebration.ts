@@ -11,6 +11,7 @@ import { WIN_DISPLAY } from "../assets/manifest";
 import { CANVAS, WIN_CELEBRATION as L, WIN_TIERS, type WinTierId } from "./theme";
 import { valueStyle } from "./hud/styles";
 import { money } from "./hud/text";
+import { sound, type SoundHandle } from "../audio/sound";
 
 const clamp01 = (t: number): number => Math.max(0, Math.min(1, t));
 const easeOutCubic = (t: number): number => 1 - Math.pow(1 - t, 3);
@@ -62,6 +63,8 @@ export class WinCelebration extends Container {
   /** Base scale that fits the tier art to `tierWidth`, and a transient pop on top. */
   private tierBaseScale = 1;
   private tierPunch = 0;
+  /** The looping coin-counter sound, live only while the amount counts up. */
+  private coin?: SoundHandle;
 
   constructor() {
     super();
@@ -148,6 +151,8 @@ export class WinCelebration extends Container {
     this.phase = "in";
     this.elapsed = 0;
 
+    sound.play("win-sfx"); // fanfare as the modal appears
+
     return new Promise((resolve) => (this.resolve = resolve));
   }
 
@@ -167,7 +172,11 @@ export class WinCelebration extends Container {
         const t = clamp01(this.elapsed / L.inMs);
         this.alpha = t;
         this.content.scale.set(0.85 + 0.15 * easeOutBack(t));
-        if (t >= 1) this.enter("count");
+        if (t >= 1) {
+          this.enter("count");
+          // The amount starts climbing — loop the coin counter until it lands.
+          this.coin = sound.play("coin-counter", { loop: true });
+        }
         break;
       }
       case "count": {
@@ -178,6 +187,7 @@ export class WinCelebration extends Container {
         if (t >= 1) {
           this.setAmount(this.total);
           this.updateTier(this.total);
+          this.stopCoin();
           this.enter("hold");
         }
         break;
@@ -200,10 +210,17 @@ export class WinCelebration extends Container {
       // Fast-forward to the full amount + final tier, then hold.
       this.setAmount(this.total);
       this.updateTier(this.total);
+      this.stopCoin();
       this.enter("hold");
     } else if (this.phase === "hold") {
       this.enter("out");
     }
+  }
+
+  /** Stop the looping coin-counter sound (if it's playing). */
+  private stopCoin(): void {
+    this.coin?.stop();
+    this.coin = undefined;
   }
 
   private enter(phase: Phase): void {
@@ -214,6 +231,7 @@ export class WinCelebration extends Container {
   private finish(): void {
     this.visible = false;
     this.phase = "idle";
+    this.stopCoin(); // defensive: never leave the loop running past dismissal
     const done = this.resolve;
     this.resolve = undefined;
     done?.();
