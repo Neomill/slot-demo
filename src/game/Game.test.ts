@@ -156,7 +156,7 @@ describe('Game — free spins', () => {
     expect(game.balance).toBeGreaterThan(afterBuy); // paid in one lump at the end
   });
 
-  it('collecting 4 wilds steps the multiplier to x2 and awards +10 spins', async () => {
+  it('collecting 4 wilds steps the multiplier to x2 and queues a +10 award', async () => {
     const fsWild = withCells(blank(), [
       [0, 0, 'wild'],
       [0, 2, 'wild'],
@@ -170,7 +170,33 @@ describe('Game — free spins', () => {
     expect(result?.multiplier).toBe(2);
     expect(result?.totalWin).toBeCloseTo((result?.baseWin ?? 0) * 2);
     expect(game.getState().freeSpins?.wildCounter).toBe(4);
-    expect(game.getState().freeSpins?.remaining).toBe(19);
+    // The +10 is queued, not added to the counter — only the consumed spin shows.
+    expect(game.getState().freeSpins?.remaining).toBe(9);
+    expect(game.getState().freeSpins?.queuedPanels).toBe(1);
+    expect(game.hasQueuedFreeSpins).toBe(true);
+  });
+
+  it('queued awards are transferred to the counter at the end of the session', async () => {
+    const fsWild = withCells(blank(), [
+      [0, 0, 'wild'],
+      [0, 2, 'wild'],
+      [1, 0, 'wild'],
+      [1, 2, 'wild'],
+    ]);
+    // Buy 'super' = 10 initial spins; the first spin collects 4 wilds (queues a
+    // panel), then we drain the rest — the session stays alive on the queued award.
+    const game = new Game({ reelGenerator: reelStub({ freeSpins: fsWild }), startingBalance: 100000, betPerLine: 1 });
+    await game.init();
+    game.buyBonus('super');
+    let result = await game.spin(); // 1st of 10: collects wilds, queues a panel
+    for (let i = 0; i < 9; i++) result = await game.spin(); // drain the rest to 0
+    expect(game.getState().freeSpins?.remaining).toBe(0);
+    expect(result?.pendingActivation).toBe(true);
+    expect(game.currentMode).toBe(GameMode.FREE_SPINS); // not ended — award pending
+
+    const award = game.activateQueuedFreeSpins();
+    expect(award).toEqual({ panelIndex: 0, added: 10 });
+    expect(game.getState().freeSpins?.remaining).toBe(10);
   });
 
   it('3 scatters (bonus) trigger 10 free spins', async () => {

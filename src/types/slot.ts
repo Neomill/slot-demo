@@ -48,6 +48,12 @@ export interface SpinResult {
   wildsCollected?: number;
   /** Free Spins: amount the Wild(s) collected from Prize symbols (pre-multiplier). */
   collectWin?: number;
+  /**
+   * Free Spins: set when the counter has emptied but completed panels still hold
+   * queued +10 awards — the cue for the UI to play the activation/transfer
+   * ceremony (see FreeSpinManager) before the next spin.
+   */
+  pendingActivation?: boolean;
   freeSpins?: FreeSpinSnapshot;
   holdAndRespin?: HoldAndRespinSnapshot;
 }

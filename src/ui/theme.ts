@@ -148,6 +148,84 @@ export const WIN_FX = {
 } as const;
 
 /**
+ * Wild Charge feature-progression cinematic (Free Spins only). When a Wild
+ * collects prizes it absorbs the energy, then fires a curved beam up to the next
+ * lock on the multiplier ladder, charging it. Every value here is
+ * presentation-only — the reels/panel reveal the engine's wild count, never
+ * change it. See Reels.collectIntoWild, FeatureBeam, FreeSpinPanel.
+ */
+export const WILD_CHARGE = {
+  // Phase 3 — Camera focus: the reels darken (overlay alpha; reels read at ~75%)
+  // while the beam travels, so the lit panel reads as the brighter focal point.
+  reelDim: 0.28,
+  focusFadeMs: 200,
+
+  // Phase 2 — The beam: a quadratic bezier bowed `curve` px to the side, drawn
+  // gold-cored with a blurred blue edge, trailing gold spark particles.
+  beamTravelMs: 460,
+  beamCurve: 140, // px lateral bow of the spline
+  beamCoreColor: 0xffe7a3,
+  beamCoreWidth: 6,
+  beamEdgeColor: 0x4aa8ff,
+  beamEdgeWidth: 18,
+  beamFadeMs: 200,
+  sparkColor: 0xffe08a,
+  sparkEveryMs: 22, // a spark spawned this often along the beam head
+
+  // Phase 4 — Charge slot: energy hit → expand → fill (gold ripple) → bounce.
+  hitMs: 80,
+  expandMs: 120,
+  fillMs: 180,
+  bounceMs: 100,
+  lockExpandScale: 1.6,
+  rippleColor: 0xffd34d,
+  rippleRadius: 48,
+
+  // Phase 5 — Partial panel (1–3/4) gently breathes its glow 40% ↔ 60%.
+  breatheMs: 1600,
+  breatheMin: 0.4,
+  breatheMax: 0.6,
+
+  // Phase 6 — Fourth charge: the whole panel flashes, a gold spark runs the
+  // border like electricity, then the "+10 FREE SPIN" banner reveals (pop in).
+  flashMs: 240,
+  borderRunMs: 820,
+  borderColor: 0xffe7a3,
+  bannerRevealMs: 320,
+  // After the celebration the gold border stays lit (steady) while the panel is
+  // queued — a persistent "on queue, reward waiting" frame on top of the plate.
+  queueBorderAlpha: 0.9,
+
+  // Queue state: a completed panel pulses gold every ~2s — "reward waiting".
+  // Kept gentle (and below the breathing range) so a row of completed panels
+  // doesn't read as harsh. All panels share one clock, so they pulse in unison.
+  queuePulseMs: 2000,
+  queueGlowMin: 0.12,
+  queueGlowMax: 0.42,
+  glowColor: 0xffe08a,
+
+  // Free Spin end ceremony (Phases 7–8). The counter empties, a beat of
+  // anticipation, then each queued panel activates → transfers its 10 spins as
+  // energy orbs → is consumed (grey + checkmark), chaining to the next panel.
+  endPauseMs: 300, // beat after the counter hits 0, before activation
+  activationMs: 460, // panel glows, opens, light escapes
+  orbCount: 10, // orbs emitted per panel (one per awarded spin)
+  orbStaggerMs: 55, // gap between successive orbs leaving the panel
+  orbTravelMs: 440,
+  orbArcCurve: 90, // px bow on the orb's path to the counter
+  orbColor: 0xffe7a3,
+  counterBumpMs: 180, // counter scale 1 → 1.12 → 1 on each increment
+  counterBumpScale: 1.12,
+  // Once collected, a panel fades to a dull "disabled" look (desaturated +
+  // darkened + faded) so it reads as spent vs. the lit panels still on queue.
+  consumeMs: 420,
+  consumeSaturate: -0.85, // ColorMatrix saturate amount (≈ greyscale)
+  consumeBrightness: 0.5, // darken multiplier
+  consumeDullAlpha: 0.7, // overall panel opacity when collected
+  chainGapMs: 500, // wait before the next queued panel begins
+} as const;
+
+/**
  * The dark panel behind the reels. By default it matches the reel grid exactly;
  * use paddingX/paddingY to grow (or, with negatives, shrink) it on each side.
  */
@@ -259,6 +337,11 @@ export const SIDE_PANEL_LOOK = {
   glowAlpha: 0.5,
   /** ms to ease between dull and lit. */
   fadeMs: 140,
+
+  disabledSaturate: -0.7, // ColorMatrix saturate amount (≈ greyscale)
+  disabledBrightness: 0.5, // darken multiplier
+  disabledAlpha: 0.7, // overall panel opacity
+  disabledFadeMs: 420, // ms to ease into / out of the locked-out look
 } as const;
 
 export const hudColors = {

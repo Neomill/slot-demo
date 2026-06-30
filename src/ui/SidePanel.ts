@@ -69,4 +69,14 @@ export class SidePanel extends Container {
     this.buy.setEnabled(enabled);
     this.luck.setEnabled(enabled);
   }
+
+  /**
+   * Ease both panels into / out of the "locked out" look while a bonus round
+   * owns the screen (they can't be bought / toggled during Free Spins or Hold &
+   * Respin). Separate from {@link setEnabled} so a brief base spin stays subtle.
+   */
+  setLockedOut(lockedOut: boolean): void {
+    this.buy.setLockedOut(lockedOut);
+    this.luck.setLockedOut(lockedOut);
+  }
 }

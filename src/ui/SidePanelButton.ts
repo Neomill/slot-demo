@@ -51,6 +51,8 @@ export class SidePanelButton extends Container {
   private hovered = false;
   private pressed = false;
   private lit = 0; // 0 = dull (idle) … 1 = full colour (hover/active)
+  private lockedOut = false; // a bonus round owns the screen (can't be clicked)
+  private dim = 0; // 0 = normal … 1 = fully "locked out" (eased toward lockedOut)
 
   private readonly art: Container;
   private readonly color = new ColorMatrixFilter();
@@ -123,13 +125,25 @@ export class SidePanelButton extends Container {
 
   /** Ease toward the target look. Call once per frame with the frame delta (ms). */
   update(dtMs: number): void {
-    const target = (this.hovered || this.active) && this.enabled ? 1 : 0;
-    if (this.lit !== target) {
+    let changed = false;
+
+    const litTarget = (this.hovered || this.active) && this.enabled ? 1 : 0;
+    if (this.lit !== litTarget) {
       const k = Math.min(1, dtMs / LOOK.fadeMs);
-      this.lit += (target - this.lit) * k;
-      if (Math.abs(target - this.lit) < 0.004) this.lit = target;
-      this.applyLook();
+      this.lit += (litTarget - this.lit) * k;
+      if (Math.abs(litTarget - this.lit) < 0.004) this.lit = litTarget;
+      changed = true;
     }
+
+    const dimTarget = this.lockedOut ? 1 : 0;
+    if (this.dim !== dimTarget) {
+      const k = Math.min(1, dtMs / LOOK.disabledFadeMs);
+      this.dim += (dimTarget - this.dim) * k;
+      if (Math.abs(dimTarget - this.dim) < 0.004) this.dim = dimTarget;
+      changed = true;
+    }
+
+    if (changed) this.applyLook();
   }
 
   /** Flip the visible texture (toggle) and let the lit-while-active rule take over. */
@@ -158,13 +172,28 @@ export class SidePanelButton extends Container {
     }
   }
 
+  /**
+   * Mark the button as "locked out" — a bonus round owns the screen, so it eases
+   * to a clearly-disabled look (desaturated, darker, faded). Separate from
+   * {@link setEnabled} (input), so a brief base spin doesn't trigger the heavy
+   * look; only the longer bonus modes do.
+   */
+  setLockedOut(lockedOut: boolean): void {
+    this.lockedOut = lockedOut;
+  }
+
   private applyLook(): void {
-    const sat = lerp(LOOK.dullSaturate, 0, this.lit);
-    const bri = lerp(LOOK.dullBrightness, 1, this.lit);
+    // Idle → lit blend (hover / active).
+    let sat = lerp(LOOK.dullSaturate, 0, this.lit);
+    let bri = lerp(LOOK.dullBrightness, 1, this.lit);
+    // Locked-out blend on top: push further toward greyscale + dark, and fade.
+    sat = lerp(sat, LOOK.disabledSaturate, this.dim);
+    bri = lerp(bri, LOOK.disabledBrightness, this.dim);
     this.color.saturate(sat, false);
     this.color.brightness(bri, true);
 
-    this.glow.alpha = this.lit * LOOK.glowAlpha;
+    this.glow.alpha = this.lit * LOOK.glowAlpha * (1 - this.dim);
+    this.alpha = lerp(1, LOOK.disabledAlpha, this.dim);
 
     const scale = this.pressed
       ? LOOK.pressScale

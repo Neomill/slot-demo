@@ -13,7 +13,7 @@ describe('FreeSpinManager', () => {
     expect(m.isActive).toBe(false);
   });
 
-  it('steps the multiplier at each 4th wild and awards +10 spins per crossing', () => {
+  it('steps the multiplier at each 4th wild and queues +10 spins per crossing', () => {
     const m = new FreeSpinManager();
     m.start(10, 100); // final-tier multiplier 100 (e.g. ULTRA)
 
@@ -33,8 +33,38 @@ describe('FreeSpinManager', () => {
     expect(r.awardedSpins).toBe(0);
     expect(r.multiplier).toBe(100);
 
-    expect(m.snapshot().remaining).toBe(40); // 10 + 3 x 10
+    // Awards are queued (not added to the counter) until activated.
+    expect(m.snapshot().remaining).toBe(10); // unchanged — initial spins only
+    expect(m.snapshot().queuedPanels).toBe(3);
     expect(m.snapshot().wildCounter).toBe(16);
+  });
+
+  it('activates queued panel awards into the counter, in order', () => {
+    const m = new FreeSpinManager();
+    m.start(10, 100);
+    m.collectWilds(8); // crosses ×2 and ×3 -> two queued panels
+
+    expect(m.snapshot().queuedPanels).toBe(2);
+    expect(m.remainingSpins).toBe(10);
+
+    expect(m.activateQueued()).toEqual({ panelIndex: 0, added: 10 });
+    expect(m.remainingSpins).toBe(20);
+    expect(m.activateQueued()).toEqual({ panelIndex: 1, added: 10 });
+    expect(m.remainingSpins).toBe(30);
+
+    expect(m.activateQueued()).toBeNull();
+    expect(m.hasQueuedAwards).toBe(false);
+  });
+
+  it('stays active while awards are queued even with no spins left', () => {
+    const m = new FreeSpinManager();
+    m.start(1, 10);
+    m.collectWilds(4); // queue one panel
+    m.consume(); // drain the only initial spin
+    expect(m.remainingSpins).toBe(0);
+    expect(m.isActive).toBe(true); // queued award keeps it alive
+    m.activateQueued();
+    expect(m.remainingSpins).toBe(10);
   });
 
   it('accumulates win', () => {

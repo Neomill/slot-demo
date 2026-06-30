@@ -9,7 +9,7 @@ import { ReelGenerator } from '../slot/ReelGenerator';
 import { PaylineEvaluator } from '../slot/PaylineEvaluator';
 import { PrizeEvaluator } from '../slot/PrizeEvaluator';
 import { BonusManager } from '../bonus/BonusManager';
-import { FreeSpinManager } from '../bonus/FreeSpinManager';
+import { FreeSpinManager, type ActivatedAward } from '../bonus/FreeSpinManager';
 import { HoldAndRespinManager } from '../bonus/HoldAndRespinManager';
 import { BuyBonusManager } from '../bonus/BuyBonusManager';
 import { PAYLINES } from '../config/paylines';
@@ -137,6 +137,21 @@ export class Game {
     if (this.chance2x === enabled) return;
     this.chance2x = enabled;
     this.events.emit(GameEvent.ChanceChange, { enabled });
+  }
+
+  /** Free Spins: completed panels still hold queued +10 awards to transfer. */
+  get hasQueuedFreeSpins(): boolean {
+    return this.mode === GameMode.FREE_SPINS && this.freeSpins.hasQueuedAwards;
+  }
+
+  /**
+   * Transfer the next queued panel's award into the live spin counter. Driven by
+   * the UI's activation/transfer ceremony once the counter has emptied; returns
+   * the panel + spins moved, or null if nothing is queued.
+   */
+  activateQueuedFreeSpins(): ActivatedAward | null {
+    if (this.mode !== GameMode.FREE_SPINS) return null;
+    return this.freeSpins.activateQueued();
   }
 
   getState(): GameStateSnapshot {
@@ -355,6 +370,10 @@ export class Game {
       collectWin,
       freeSpins: this.freeSpins.snapshot(),
     };
+    // Counter emptied with awards still queued → cue the activation ceremony.
+    if (this.freeSpins.remainingSpins === 0 && this.freeSpins.hasQueuedAwards) {
+      result.pendingActivation = true;
+    }
     this.emitSettled(result);
 
     if (!this.freeSpins.isActive) {
