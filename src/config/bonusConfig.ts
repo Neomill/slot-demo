@@ -61,9 +61,13 @@ export const bonusConfig = {
     values: [2, 5, 10, 20, 50],
   },
 
-  chance2x: {
-    /** Spin cost is multiplied by this when Chance x2 (Luck Boost) is enabled — a +50% surcharge. */
-    costMultiplier: 1.5,
+  buyHoldAndRespin: {
+    /**
+     * Cost of buying straight into Hold & Respin, as a multiple of the current
+     * (total) bet. Buying lands the trigger's worth of trophies and enters the
+     * feature immediately — the same flow a natural 5-trophy spin would take.
+     */
+    costMultiplier: 3,
   },
 } as const;
 

@@ -36,8 +36,7 @@ import buttonSubtract from "./game-control/button-subtract.png";
 import buttonTurbo from "./game-control/button-turbo.png";
 
 import buyBonus from "./buy-bunos.png";
-import luckBoostOn from "./luck-boost-on.png";
-import luckBoostOff from "./luck-boost-off.png";
+import buyHoldRespin from "./buy-hold-and-respin.png";
 
 import freeSpinBgLarge from "./free-spin-panel/free-spin-bg-counter-large.png";
 import freeSpinBgSmall from "./free-spin-panel/free-spin-bg-counter-small.png";
@@ -98,8 +97,7 @@ export const CONTROL = {
 /** Side call-to-action panels (left of the reels). */
 export const SIDE = {
   buyBonus,
-  luckOn: luckBoostOn,
-  luckOff: luckBoostOff,
+  buyHoldRespin,
 };
 
 /**

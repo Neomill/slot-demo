@@ -65,5 +65,4 @@ export interface GameStateSnapshot {
   currentBet: number;
   freeSpins?: FreeSpinSnapshot;
   holdAndRespin?: HoldAndRespinSnapshot;
-  chance2x: boolean;
 }

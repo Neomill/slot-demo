@@ -344,6 +344,31 @@ export const SIDE_PANEL_LOOK = {
   disabledFadeMs: 420, // ms to ease into / out of the locked-out look
 } as const;
 
+/**
+ * Hold & Respin entry + lock cinematic (the spec's anticipation → confirmation
+ * beats, scaled to the systems we already have). All presentation-only.
+ *
+ * - Golden Freeze (trigger): the recognition moment as the feature begins — every
+ *   non-trophy tile fades back while the trophies stay lit, each bloom-glowing
+ *   with a shockwave, and the board gives a short shake.
+ * - Trophy lock impact: a new trophy landing mid-feature lands with its own
+ *   shockwave + glow (the "trophy secures another lap" beat).
+ * - The "REMAINING" panel drops its number in on entry, and plays a "Golden
+ *   Rewind" (old number bursts, new one slams down) whenever the counter refills.
+ */
+export const HOLD_RESPIN_FX = {
+  freezeDimAlpha: 0.35, // non-trophy tile opacity during the freeze
+  freezeHoldMs: 750,
+  freezeShakeAmp: 2, // px
+  freezeShakeMs: 360,
+  freezeGlowPeak: 0.7, // additive gold bloom behind each trophy
+  lockGlowPeak: 0.6, // bloom behind a trophy that locks during a respin
+  lockGlowMs: 420,
+  entranceMs: 420, // counter "number drop" on entry
+  rewindOutMs: 260, // old number bursts/fades
+  rewindInMs: 320, // new number slams down
+} as const;
+
 export const hudColors = {
   barTop: 0x16243f,
   barBottom: 0x080d18,

@@ -198,15 +198,15 @@ The next spin after the purchase triggers the Free Spins feature.
 
 ---
 
-## Chance ×2
+## Buy Hold & Respin
 
-Chance ×2 can be activated during the main game.
+Players can buy directly into the Hold & Respin feature from the main game.
 
-When enabled, it increases the chance of triggering Free Spins.
+The purchase price is **3× the current total bet** and is displayed on the **Buy Hold & Respin** button. If the bet changes, the price changes accordingly.
 
-The cost is displayed on the **Chance ×2** button, which also allows the feature to be enabled or disabled.
+Buying lands the trigger's worth of Trophy symbols and enters Hold & Respin immediately, played exactly as a naturally triggered feature (the respin counter starts at **3**).
 
-Chance ×2 is available only during the main game.
+Buy Hold & Respin is available only during the main game.
 
 ---
 

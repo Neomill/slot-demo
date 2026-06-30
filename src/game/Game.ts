@@ -58,7 +58,6 @@ export class Game {
   private readonly buyBonusManager: BuyBonusManager;
 
   private mode: GameMode = GameMode.BASE;
-  private chance2x = false;
   private _betPerLine: number;
 
   constructor(options: GameOptions = {}) {
@@ -96,18 +95,19 @@ export class Game {
     return PAYLINES.length;
   }
 
-  /** Total stake per base spin (before Chance x2). */
+  /** Total stake per base spin. */
   get currentBet(): number {
     return this._betPerLine * PAYLINES.length;
   }
 
-  /** Cost of the next base spin (Chance x2 applies; bonus spins are free). */
+  /** Cost of the next base spin (bonus spins are free). */
   get spinCost(): number {
-    return this.currentBet * (this.chance2x ? bonusConfig.chance2x.costMultiplier : 1);
+    return this.currentBet;
   }
 
-  get isChance2x(): boolean {
-    return this.chance2x;
+  /** Cost of buying straight into Hold & Respin (a multiple of the current bet). */
+  get buyHoldAndRespinCost(): number {
+    return bonusConfig.buyHoldAndRespin.costMultiplier * this.currentBet;
   }
 
   async init(): Promise<void> {
@@ -131,14 +131,6 @@ export class Game {
     this.events.emit(GameEvent.BetChange, { betPerLine, stake: this.currentBet });
   }
 
-  /** Toggle Chance x2. Only allowed while idle in the base game. */
-  setChance2x(enabled: boolean): void {
-    if (this.state.current !== GameState.IDLE || this.mode !== GameMode.BASE) return;
-    if (this.chance2x === enabled) return;
-    this.chance2x = enabled;
-    this.events.emit(GameEvent.ChanceChange, { enabled });
-  }
-
   /** Free Spins: completed panels still hold queued +10 awards to transfer. */
   get hasQueuedFreeSpins(): boolean {
     return this.mode === GameMode.FREE_SPINS && this.freeSpins.hasQueuedAwards;
@@ -159,7 +151,6 @@ export class Game {
       mode: this.mode,
       balance: this.wallet.balance,
       currentBet: this.currentBet,
-      chance2x: this.chance2x,
     };
     if (this.mode === GameMode.FREE_SPINS) snapshot.freeSpins = this.freeSpins.snapshot();
     if (this.mode === GameMode.HOLD_AND_RESPIN) snapshot.holdAndRespin = this.holdAndRespin.snapshot();
@@ -188,19 +179,47 @@ export class Game {
   }
 
   /**
-   * Debug helper: force a Hold & Respin trigger from idle in the base game.
-   * Drops the trigger's worth of trophies onto a real base board (one per reel)
-   * and enters the feature exactly as a natural triggering spin would, so the
-   * UI auto-plays the respins. Console: `game.debugTriggerHoldAndRespin()`.
+   * Buy straight into Hold & Respin: debit the cost (a multiple of the current
+   * bet), land the trigger's worth of trophies onto a real base board, and enter
+   * the feature exactly as a natural triggering spin would, so the UI animates
+   * the trophy landing and auto-plays the respins.
+   */
+  buyHoldAndRespin(): SpinResult | null {
+    if (this.state.current !== GameState.IDLE || this.mode !== GameMode.BASE) {
+      this.events.emit(GameEvent.SpinRejected, { reason: 'busy' });
+      return null;
+    }
+    const cost = this.buyHoldAndRespinCost;
+    if (!this.wallet.canAfford(cost)) {
+      this.events.emit(GameEvent.SpinRejected, { reason: 'insufficient_funds' });
+      return null;
+    }
+    this.wallet.debit(cost, 'bet');
+    return this.triggerHoldAndRespinFromBase(cost, 'buy');
+  }
+
+  /**
+   * Debug helper: force a Hold & Respin trigger from idle in the base game, free
+   * of charge. Console: `game.debugTriggerHoldAndRespin()`.
    */
   debugTriggerHoldAndRespin(): SpinResult | null {
     if (this.state.current !== GameState.IDLE || this.mode !== GameMode.BASE) {
       this.events.emit(GameEvent.SpinRejected, { reason: 'busy' });
       return null;
     }
+    return this.triggerHoldAndRespinFromBase(0, 'natural');
+  }
 
+  /**
+   * Shared "enter Hold & Respin from a fabricated base board" path used by both
+   * the buy and the debug trigger. Drops the trigger's worth of trophies onto a
+   * real base board (one per reel), evaluates any incidental base win, then hands
+   * off to {@link startHoldAndRespin} and settles. `stake` is the cost already
+   * debited (0 for the debug trigger), reported on the SpinStart event.
+   */
+  private triggerHoldAndRespinFromBase(stake: number, trigger: 'natural' | 'buy'): SpinResult {
     this.state.set(GameState.SPINNING);
-    this.events.emit(GameEvent.SpinStart, { betPerLine: this._betPerLine, stake: 0 });
+    this.events.emit(GameEvent.SpinStart, { betPerLine: this._betPerLine, stake });
 
     const grid = this.reels.generate('base');
     const needed = bonusConfig.holdAndRespin.trigger.bonusSymbols;
@@ -225,7 +244,7 @@ export class Game {
       bonusCount,
     };
 
-    this.startHoldAndRespin(grid, result);
+    this.startHoldAndRespin(grid, result, trigger);
 
     this.emitSettled(result);
     this.state.set(GameState.IDLE);
@@ -237,7 +256,11 @@ export class Game {
    * collect those starting values right away (so the win meter shows them as the
    * trophies land), snapshot onto `result`, and switch mode.
    */
-  private startHoldAndRespin(grid: SymbolId[][], result: SpinResult): void {
+  private startHoldAndRespin(
+    grid: SymbolId[][],
+    result: SpinResult,
+    trigger: 'natural' | 'buy' = 'natural',
+  ): void {
     this.holdAndRespin.start(grid);
     const trophyWin = this.holdAndRespin.trophyTotal() * this._betPerLine;
     if (trophyWin > 0) {
@@ -252,6 +275,7 @@ export class Game {
     this.events.emit(GameEvent.HoldRespinStart, {
       respins: this.holdAndRespin.remaining,
       lockedBonus: this.bonus.countBonus(grid),
+      trigger,
     });
   }
 
@@ -282,7 +306,7 @@ export class Game {
     this.wallet.debit(cost, 'bet');
     this.events.emit(GameEvent.SpinStart, { betPerLine: this._betPerLine, stake: cost });
 
-    const grid = this.reels.generate(this.chance2x ? 'chance2x' : 'base');
+    const grid = this.reels.generate('base');
     const prizes = this.prizes.roll(grid);
 
     // Highest of (normal line win, prize-symbol win) on each payline.

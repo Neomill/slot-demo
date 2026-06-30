@@ -63,7 +63,7 @@ describe('Game — base mode', () => {
     expect(game.balance).toBe(3);
   });
 
-  it('Chance x2 adds a 50% surcharge and uses the chance2x reels', async () => {
+  it('charges the plain stake (no surcharge) and uses the base reels', async () => {
     let usedSet: ReelSetId | null = null;
     const reels = {
       generate: (setId: ReelSetId) => {
@@ -73,12 +73,43 @@ describe('Game — base mode', () => {
     } as unknown as ReelGenerator;
     const game = new Game({ reelGenerator: reels, startingBalance: 1000, betPerLine: 1 });
     await game.init();
-    game.setChance2x(true);
-    expect(game.spinCost).toBe(game.currentBet * 1.5);
+    expect(game.spinCost).toBe(game.currentBet);
     const cost = game.spinCost;
     await game.spin();
-    expect(usedSet).toBe('chance2x');
+    expect(usedSet).toBe('base');
     expect(game.balance).toBe(1000 - cost);
+  });
+});
+
+describe('Game — buy hold & respin', () => {
+  it('deducts 3x the bet and enters Hold & Respin with 3 respins', async () => {
+    const game = new Game({
+      reelGenerator: reelStub({ base: blank(), holdAndRespin: blank() }),
+      startingBalance: 1000,
+      betPerLine: 1,
+    });
+    await game.init();
+    const cost = game.buyHoldAndRespinCost;
+    expect(cost).toBe(game.currentBet * 3);
+    const before = game.balance;
+    const result = game.buyHoldAndRespin();
+    expect(game.currentMode).toBe(GameMode.HOLD_AND_RESPIN);
+    expect(result?.bonusCount).toBe(5); // the trigger's worth of trophies landed
+    expect(game.getState().holdAndRespin?.remainingRespins).toBe(3);
+    // No incidental base win on a blank board, so only the cost left the wallet.
+    expect(game.balance).toBe(before - cost);
+  });
+
+  it('rejects the purchase it cannot afford and stays in BASE', async () => {
+    const game = new Game({ reelGenerator: reelStub({ base: blank() }), startingBalance: 2, betPerLine: 1 });
+    await game.init();
+    let reason: string | null = null;
+    game.events.on(GameEvent.SpinRejected, (e) => (reason = e.reason));
+    const result = game.buyHoldAndRespin();
+    expect(result).toBeNull();
+    expect(reason).toBe('insufficient_funds');
+    expect(game.currentMode).toBe(GameMode.BASE);
+    expect(game.balance).toBe(2);
   });
 });
 

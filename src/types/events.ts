@@ -12,7 +12,6 @@ export const GameEvent = {
   ModeChange: 'mode:change',
   BalanceChange: 'balance:change',
   BetChange: 'bet:change',
-  ChanceChange: 'chance:change',
   SpinStart: 'spin:start',
   SpinResult: 'spin:result',
   SpinSettled: 'spin:settled',
@@ -41,7 +40,6 @@ export type GameEventMap = {
   [GameEvent.ModeChange]: { from: GameMode; to: GameMode };
   [GameEvent.BalanceChange]: { balance: number; delta: number; reason: BalanceReason };
   [GameEvent.BetChange]: { betPerLine: number; stake: number };
-  [GameEvent.ChanceChange]: { enabled: boolean };
   [GameEvent.SpinStart]: { betPerLine: number; stake: number };
   [GameEvent.SpinResult]: { result: SpinResult };
   [GameEvent.SpinSettled]: { totalWin: number; balance: number };
@@ -50,7 +48,7 @@ export type GameEventMap = {
   [GameEvent.FreeSpinsStart]: { spins: number; trigger: 'scatter' | 'buy' };
   [GameEvent.FreeSpinsEnd]: { totalWin: number };
   [GameEvent.WildsCollected]: { count: number; wildCounter: number; multiplier: number; awardedSpins: number };
-  [GameEvent.HoldRespinStart]: { respins: number; lockedBonus: number };
+  [GameEvent.HoldRespinStart]: { respins: number; lockedBonus: number; trigger: 'natural' | 'buy' };
   [GameEvent.HoldRespinUpdate]: { remainingRespins: number; newBonus: number; lockedBonus: number };
   [GameEvent.HoldRespinEnd]: { totalWin: number };
   [GameEvent.BonusBought]: { tier: BuyBonusTier; cost: number; spins: number };

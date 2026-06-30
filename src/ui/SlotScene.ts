@@ -64,7 +64,10 @@ function wildPositions(grid: SymbolId[][]): Position[] {
 }
 
 /** Locked trophies as Prize cells, so the reels can bake their value badges. */
-function trophyValueCells(locked: boolean[][], values: number[][]): PrizeCell[] {
+function trophyValueCells(
+  locked: boolean[][],
+  values: number[][],
+): PrizeCell[] {
   const cells: PrizeCell[] = [];
   for (let reel = 0; reel < values.length; reel++) {
     for (let row = 0; row < values[reel].length; row++) {
@@ -94,10 +97,13 @@ const MAX_WILDS = WILDS_PER_PANEL * 3;
 /** Which bonus tier the Buy Bonus panel purchases. */
 const BUY_BONUS_TIER: BuyBonusTier = "super";
 
-const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
+const wait = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Normal symbols only — used to fill a synthesized board behind the Scatters. */
-const FILLER_SYMBOLS = SYMBOLS.filter((s) => s !== SCATTER && s !== WILD && s !== BONUS);
+const FILLER_SYMBOLS = SYMBOLS.filter(
+  (s) => s !== SCATTER && s !== WILD && s !== BONUS,
+);
 
 /** Fisher–Yates shuffle (returns a new array). */
 function shuffle<T>(items: T[]): T[] {
@@ -125,7 +131,9 @@ function buyBonusBoard(): SymbolId[][] {
   for (let reel = 0; reel < reels; reel++) {
     const column: SymbolId[] = [];
     for (let row = 0; row < rows; row++) {
-      column.push(FILLER_SYMBOLS[Math.floor(Math.random() * FILLER_SYMBOLS.length)]);
+      column.push(
+        FILLER_SYMBOLS[Math.floor(Math.random() * FILLER_SYMBOLS.length)],
+      );
     }
     grid.push(column);
   }
@@ -211,7 +219,6 @@ export class SlotScene {
     this.subscribe();
     await this.game.init();
     this.hud.setWin(0);
-    this.sidePanel.setLuckBoost(this.game.isChance2x);
     this.updateSidePanelCosts();
     this.refreshControls();
     this.refreshFreeSpinOverlay();
@@ -221,6 +228,7 @@ export class SlotScene {
       this.hud.update(ticker.deltaMS);
       this.sidePanel.update(ticker.deltaMS);
       this.freeSpinPanel.update(ticker.deltaMS);
+      this.holdRespinPanel.update(ticker.deltaMS);
       this.featureBeam.update(ticker.deltaMS);
       this.updateBloom(ticker.deltaMS);
       this.updateBackgroundDim(ticker.deltaMS);
@@ -233,7 +241,8 @@ export class SlotScene {
     if (this.bgBright === this.bgBrightTarget) return;
     const step = Math.min(1, dtMs / ANTICIPATION.dimFadeMs);
     this.bgBright += (this.bgBrightTarget - this.bgBright) * step;
-    if (Math.abs(this.bgBright - this.bgBrightTarget) < 0.004) this.bgBright = this.bgBrightTarget;
+    if (Math.abs(this.bgBright - this.bgBrightTarget) < 0.004)
+      this.bgBright = this.bgBrightTarget;
     const v = Math.round(this.bgBright * 255);
     this.background.tint = (v << 16) | (v << 8) | v;
   }
@@ -243,7 +252,8 @@ export class SlotScene {
     if (this.featDim === this.featDimTarget) return;
     const step = Math.min(1, dtMs / WILD_CHARGE.focusFadeMs);
     this.featDim += (this.featDimTarget - this.featDim) * step;
-    if (Math.abs(this.featDim - this.featDimTarget) < 0.004) this.featDim = this.featDimTarget;
+    if (Math.abs(this.featDim - this.featDimTarget) < 0.004)
+      this.featDim = this.featDimTarget;
     this.featureDim.alpha = this.featDim;
   }
 
@@ -305,19 +315,20 @@ export class SlotScene {
 
     const logo = new Sprite(Assets.get<Texture>(LOGO));
     logo.anchor.set(0.5, 0);
-    logo.position.set(CANVAS.width / 2, 24);
+    logo.position.set(CANVAS.width / 2, 20);
 
     this.hud = new Hud({
       onSpin: () => void this.game.spin(),
       onBet: (direction) => this.changeBet(direction),
-      onTurbo: () => this.game.setChance2x(!this.game.isChance2x),
+      // Turbo is inert for now (it used to toggle the removed Chance x2 feature).
+      onTurbo: () => {},
       onMenu: () => console.info("[menu] not implemented yet"),
     });
     this.hud.position.set(HUD_POS.x, HUD_POS.y);
 
     this.sidePanel = new SidePanel({
       onBuyBonus: () => void this.playBuyBonus(),
-      onToggleLuckBoost: () => this.game.setChance2x(!this.game.isChance2x),
+      onBuyHoldRespin: () => this.buyHoldRespin(),
     });
 
     this.freeSpinPanel = new FreeSpinPanel();
@@ -336,7 +347,9 @@ export class SlotScene {
 
     // Full-screen additive bloom flash for the Free Spins trigger / entry. Sits
     // above the playfield but below the HUD so the controls stay crisp.
-    this.bloom = new Graphics().rect(0, 0, CANVAS.width, CANVAS.height).fill(0xffffff);
+    this.bloom = new Graphics()
+      .rect(0, 0, CANVAS.width, CANVAS.height)
+      .fill(0xffffff);
     this.bloom.blendMode = "add";
     this.bloom.alpha = 0;
     this.bloom.eventMode = "none";
@@ -373,7 +386,8 @@ export class SlotScene {
       }
       // The base → Free Spins swap is owned by the cinematic (it happens after
       // the reels land + the intro plays); every other transition flips now.
-      const deferToCinematic = from === GameMode.BASE && to === GameMode.FREE_SPINS;
+      const deferToCinematic =
+        from === GameMode.BASE && to === GameMode.FREE_SPINS;
       if (!deferToCinematic) this.setBackground(to);
       this.refreshControls(); // entering/leaving a bonus mode flips the spin button immediately
       this.refreshFreeSpinOverlay();
@@ -382,8 +396,10 @@ export class SlotScene {
       // Seed the meter with the session total so far (0 for free spins; the
       // starting trophies' value for hold & respin) so it climbs as wins land.
       const s = this.game.getState();
-      if (to === GameMode.FREE_SPINS) this.hud.setWin(s.freeSpins?.totalWin ?? 0);
-      else if (to === GameMode.HOLD_AND_RESPIN) this.hud.setWin(s.holdAndRespin?.totalWin ?? 0);
+      if (to === GameMode.FREE_SPINS)
+        this.hud.setWin(s.freeSpins?.totalWin ?? 0);
+      else if (to === GameMode.HOLD_AND_RESPIN)
+        this.hud.setWin(s.holdAndRespin?.totalWin ?? 0);
     });
     events.on(GameEvent.SpinResult, ({ result }) => void this.render(result));
     // Reset the win meter per spin only in the base game; bonus modes keep the
@@ -408,10 +424,6 @@ export class SlotScene {
     });
     // Total Win is shown by render() once the reels land (see Spin Results).
     events.on(GameEvent.SpinSettled, () => this.refreshFreeSpinOverlay());
-    events.on(GameEvent.ChanceChange, ({ enabled }) => {
-      this.hud.setTurbo(enabled);
-      this.sidePanel.setLuckBoost(enabled);
-    });
     events.on(GameEvent.FreeSpinsStart, ({ trigger }) => {
       // New session: clear any leftover charge effects from a prior bonus.
       this.freeSpinPanel.resetProgression();
@@ -443,20 +455,45 @@ export class SlotScene {
       const { lockedBefore, locked, values } = result.holdAndRespin;
       const trophyPrizes = trophyValueCells(locked, values);
       this.holdRespinPanel.tickDown(); // deduct one respin as the reels start
-      await this.reels.respin(result.grid, lockedBefore, locked, trophyPrizes, this.game.betPerLine);
-      // Reels (and any new trophy) have landed — sync to the engine's count, which
-      // refills to 3 when a trophy or win landed this respin.
-      this.holdRespinPanel.setRemaining(result.holdAndRespin.remainingRespins);
+      await this.reels.respin(
+        result.grid,
+        lockedBefore,
+        locked,
+        trophyPrizes,
+        this.game.betPerLine,
+      );
+      // Reels (and any new trophy) have landed — settle to the engine's count.
+      // When the count went back UP (a new trophy locked, or a win refilled it)
+      // the panel plays the "Golden Rewind" reset; otherwise it just ticks.
+      await this.holdRespinPanel.settleRemaining(
+        result.holdAndRespin.remainingRespins,
+      );
     } else {
       // Prize values are baked into the landing tiles, so they scroll in with the
       // reel. On the Hold & Respin trigger spin the trophies carry their values too.
       const prizes = result.holdAndRespin
-        ? [...result.prizes, ...trophyValueCells(result.holdAndRespin.locked, result.holdAndRespin.values)]
+        ? [
+            ...result.prizes,
+            ...trophyValueCells(
+              result.holdAndRespin.locked,
+              result.holdAndRespin.values,
+            ),
+          ]
         : result.prizes;
       // Only base spins get the anticipation cinematic — pass the scene hooks so
       // the reels can dim the background and bloom on the triggering Scatter.
-      const hooks = result.mode === GameMode.BASE ? this.cinematicHooks() : undefined;
+      const hooks =
+        result.mode === GameMode.BASE ? this.cinematicHooks() : undefined;
       await this.reels.spin(result.grid, prizes, this.game.betPerLine, hooks);
+
+      // Hold & Respin trigger spin (natural 5-trophy land OR a buy): play the
+      // "Golden Freeze" recognition moment — dim everything but the trophies,
+      // bloom each trophy with a shockwave, and shake the board — before the
+      // feature's respins begin.
+      if (result.holdAndRespin && result.mode === GameMode.BASE) {
+        this.bloomElapsed = 0;
+        await this.reels.playTrophyFreeze(result.holdAndRespin.locked);
+      }
     }
 
     // Spin Results: present the winning paylines (focus → reveal → activation →
@@ -531,10 +568,15 @@ export class SlotScene {
     this.setFeatureFocus(true);
     const award = this.game.activateQueuedFreeSpins();
     if (award) {
-      const remaining = this.game.getState().freeSpins?.remaining ?? award.added;
+      const remaining =
+        this.game.getState().freeSpins?.remaining ?? award.added;
       const fromValue = remaining - award.added;
       await this.freeSpinPanel.playPanelActivation(award.panelIndex);
-      await this.freeSpinPanel.transferToCounter(award.panelIndex, fromValue, award.added);
+      await this.freeSpinPanel.transferToCounter(
+        award.panelIndex,
+        fromValue,
+        award.added,
+      );
       await this.freeSpinPanel.consumePanel(award.panelIndex);
     }
     this.setFeatureFocus(false);
@@ -557,7 +599,9 @@ export class SlotScene {
     if (this.busy || this.game.currentMode !== GameMode.BASE) return;
 
     // If it can't be afforded, let the engine emit the rejection (no cinematic).
-    const cost = bonusConfig.buyBonus[BUY_BONUS_TIER].costMultiplier * this.game.currentBet;
+    const cost =
+      bonusConfig.buyBonus[BUY_BONUS_TIER].costMultiplier *
+      this.game.currentBet;
     if (this.game.balance < cost) {
       this.game.buyBonus(BUY_BONUS_TIER);
       return;
@@ -568,7 +612,12 @@ export class SlotScene {
     this.refreshControls();
     this.reels.clearWins();
 
-    await this.reels.spin(buyBonusBoard(), [], this.game.betPerLine, this.cinematicHooks());
+    await this.reels.spin(
+      buyBonusBoard(),
+      [],
+      this.game.betPerLine,
+      this.cinematicHooks(),
+    );
 
     // The reels have landed the Scatters — commit the purchase (enters Free
     // Spins, kicks off auto-play) and play the shared intro.
@@ -581,6 +630,17 @@ export class SlotScene {
     this.busy = false;
     this.refreshControls();
     this.refreshFreeSpinOverlay();
+  }
+
+  /**
+   * Buy Hold & Respin: hand off to the engine, which debits the cost (or emits a
+   * rejection it can't afford), lands the triggering trophies, and enters the
+   * feature. The engine emits a SpinResult, so render() animates the trophy
+   * landing (golden freeze) and auto-plays the respins — no extra cinematic here.
+   */
+  private buyHoldRespin(): void {
+    if (this.busy || this.game.currentMode !== GameMode.BASE) return;
+    this.game.buyHoldAndRespin();
   }
 
   private setBackground(mode: GameMode): void {
@@ -601,15 +661,14 @@ export class SlotScene {
     this.sidePanel.setLockedOut(this.game.currentMode !== GameMode.BASE);
   }
 
-  /** Reflect the current Buy Bonus price and Luck Boost surcharge on the side panel. */
+  /** Reflect the current Buy Bonus and Buy Hold & Respin prices on the side panel. */
   private updateSidePanelCosts(): void {
     const bet = this.game.currentBet;
     const buyCost = bonusConfig.buyBonus[BUY_BONUS_TIER].costMultiplier * bet;
     this.sidePanel.setBuyPrice(money(buyCost));
 
-    // Luck Boost adds the surcharge above a normal spin (e.g. 1.5x → +50% of bet).
-    const luckSurcharge = (bonusConfig.chance2x.costMultiplier - 1) * bet;
-    this.sidePanel.setLuckCost(`+${money(luckSurcharge)}`);
+    const holdRespinCost = bonusConfig.buyHoldAndRespin.costMultiplier * bet;
+    this.sidePanel.setHoldRespinPrice(money(holdRespinCost));
   }
 
   /** Queue the next bonus spin if a bonus round is still running. */
@@ -640,7 +699,10 @@ export class SlotScene {
     const collected = result.wildsCollected ?? 0;
     if (collected <= 0) return false;
     const after = Math.min(result.freeSpins.wildCounter, MAX_WILDS);
-    const before = Math.min(result.freeSpins.wildCounter - collected, MAX_WILDS);
+    const before = Math.min(
+      result.freeSpins.wildCounter - collected,
+      MAX_WILDS,
+    );
     return after > before;
   }
 
@@ -650,7 +712,11 @@ export class SlotScene {
    * the lock, and — on every fourth — play the panel-complete celebration. Once
    * done, confirm the overlay's final counter + locks.
    */
-  private async playWildCharges(before: number, after: number, wilds: Position[]): Promise<void> {
+  private async playWildCharges(
+    before: number,
+    after: number,
+    wilds: Position[],
+  ): Promise<void> {
     const start = Math.max(0, Math.min(before, MAX_WILDS));
     const end = Math.max(0, Math.min(after, MAX_WILDS));
     if (end <= start) return;
@@ -660,11 +726,17 @@ export class SlotScene {
       const wild = wilds.length > 0 ? wilds[(i - start) % wilds.length] : null;
       const from = wild
         ? this.wildGlobal(wild)
-        : { x: REEL_ORIGIN.x + GRID.width / 2, y: REEL_ORIGIN.y + GRID.height / 2 };
+        : {
+            x: REEL_ORIGIN.x + GRID.width / 2,
+            y: REEL_ORIGIN.y + GRID.height / 2,
+          };
       const to = this.freeSpinPanel.lockGlobalPosition(i);
       await this.featureBeam.fire(from, to); // Phase 2 — beam travels, Phase 3 dim is up
       const completedPanel = await this.freeSpinPanel.chargeLock(i); // Phase 4 — charge slot
-      if (completedPanel) await this.freeSpinPanel.playPanelComplete(Math.floor(i / WILDS_PER_PANEL)); // Phase 6
+      if (completedPanel)
+        await this.freeSpinPanel.playPanelComplete(
+          Math.floor(i / WILDS_PER_PANEL),
+        ); // Phase 6
     }
     this.setFeatureFocus(false);
 
@@ -697,7 +769,8 @@ export class SlotScene {
   private refreshFreeSpinOverlay(): void {
     const s = this.game.getState();
     const inFreeSpins = s.mode === GameMode.FREE_SPINS && !!s.freeSpins;
-    const inHoldRespin = s.mode === GameMode.HOLD_AND_RESPIN && !!s.holdAndRespin;
+    const inHoldRespin =
+      s.mode === GameMode.HOLD_AND_RESPIN && !!s.holdAndRespin;
 
     // Held back during the entry cinematic so the panel doesn't pop in over the
     // base reels before the intro plays.
@@ -716,6 +789,7 @@ export class SlotScene {
     this.holdRespinPanel.visible = inHoldRespin;
     if (enteringHoldRespin && s.holdAndRespin) {
       this.holdRespinPanel.setRemaining(s.holdAndRespin.remainingRespins);
+      this.holdRespinPanel.playEntrance(); // "REMAINING" number drops into place
     }
   }
 }

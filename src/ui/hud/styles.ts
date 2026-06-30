@@ -32,11 +32,3 @@ export const spinTitleStyle = (): TextStyle =>
     fontWeight: "700",
     letterSpacing: 1,
   });
-
-export const spinSubStyle = (): TextStyle =>
-  new TextStyle({
-    fill: 0xeafff0,
-    fontFamily,
-    fontSize: 11,
-    fontWeight: "600",
-  });

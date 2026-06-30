@@ -1,7 +1,7 @@
 import type { SymbolId } from './symbols';
 
 /** One reel-strip set per game mode / modifier. */
-export type ReelSetId = 'base' | 'freeSpins' | 'chance2x' | 'holdAndRespin';
+export type ReelSetId = 'base' | 'freeSpins' | 'holdAndRespin';
 
 /**
  * A spin lands each reel on a random strip offset and reads `rows` consecutive
@@ -9,7 +9,6 @@ export type ReelSetId = 'base' | 'freeSpins' | 'chance2x' | 'holdAndRespin';
  *
  * - base:          royals + horses + sparse bonus (scatter) + sparse trophy, NO wild
  * - freeSpins:     royals + horses + wild, no bonus/trophy
- * - chance2x:      base with denser bonus → more Free Spins triggers
  * - holdAndRespin: royal fillers + frequent trophy (respins land/lock trophies)
  */
 export const REEL_SETS: Record<ReelSetId, SymbolId[][]> = {
@@ -27,13 +26,6 @@ export const REEL_SETS: Record<ReelSetId, SymbolId[][]> = {
     ['king', 'ten', 'redhorse', 'wild', 'jack', 'queen', 'goldhorse', 'ace', 'shoehorse', 'wild', 'jocky', 'ten', 'binoculars', 'cap'],
     ['queen', 'bluehorse', 'ace', 'ten', 'wild', 'jack', 'king', 'redhorse', 'cap', 'jocky', 'wild', 'goldhorse', 'shoehorse', 'queen'],
     ['jack', 'king', 'wild', 'ten', 'goldhorse', 'ace', 'queen', 'bluehorse', 'wild', 'jocky', 'cap', 'redhorse', 'binoculars', 'ace'],
-  ],
-  chance2x: [
-    ['goldhorse', 'bonus', 'ten', 'jack', 'bonus', 'queen', 'redhorse', 'bonus', 'king', 'trophy', 'bluehorse', 'jocky', 'cap', 'bonus'],
-    ['bonus', 'jocky', 'queen', 'bonus', 'ten', 'shoehorse', 'bonus', 'redhorse', 'trophy', 'jack', 'bonus', 'cap', 'ten', 'bluehorse'],
-    ['king', 'bonus', 'redhorse', 'bonus', 'jack', 'queen', 'bonus', 'goldhorse', 'shoehorse', 'trophy', 'bonus', 'ten', 'binoculars', 'cap'],
-    ['bonus', 'bluehorse', 'ace', 'bonus', 'ten', 'jack', 'bonus', 'king', 'cap', 'trophy', 'jocky', 'bonus', 'shoehorse', 'queen'],
-    ['bonus', 'king', 'ten', 'bonus', 'goldhorse', 'ace', 'bonus', 'queen', 'trophy', 'jocky', 'bonus', 'redhorse', 'binoculars', 'ace'],
   ],
   holdAndRespin: [
     ['trophy', 'ten', 'jack', 'trophy', 'queen', 'king', 'trophy', 'ace', 'ten', 'trophy', 'cap', 'jack', 'trophy', 'queen'],

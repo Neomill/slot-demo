@@ -32,12 +32,10 @@ describe('ReelGenerator', () => {
 
   it('caps the scatter count on every generated board', () => {
     const max = bonusConfig.freeSpins.maxScatters;
-    // Sweep many seeds across the scatter-bearing sets (base + the denser
-    // chance2x, which can roll 4–5 before the cap).
+    // Sweep many seeds across the scatter-bearing base set.
     for (let seed = 0; seed < 300; seed++) {
       const gen = new ReelGenerator(createSeededRng(seed));
       expect(countScatters(gen.generate('base'))).toBeLessThanOrEqual(max);
-      expect(countScatters(gen.generate('chance2x'))).toBeLessThanOrEqual(max);
     }
   });
 });

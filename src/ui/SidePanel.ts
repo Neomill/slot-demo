@@ -5,18 +5,18 @@ import { SidePanelButton } from './SidePanelButton';
 
 export interface SidePanelCallbacks {
   onBuyBonus: () => void;
-  onToggleLuckBoost: () => void;
+  onBuyHoldRespin: () => void;
 }
 
 /**
  * The pair of call-to-action panels stacked in the margin left of the reels:
- * Buy Bonus (a momentary button) above Luck Boost (an on/off toggle). A pure
+ * Buy Bonus above Buy Hold & Respin. Both are momentary buy buttons. A pure
  * view — it lays the two panels out from the layout tokens, forwards taps via
- * callbacks, and exposes a small imperative API (price / toggle / enabled).
+ * callbacks, and exposes a small imperative API (prices / enabled / locked-out).
  */
 export class SidePanel extends Container {
   private readonly buy: SidePanelButton;
-  private readonly luck: SidePanelButton;
+  private readonly holdRespin: SidePanelButton;
 
   constructor(callbacks: SidePanelCallbacks) {
     super();
@@ -30,23 +30,22 @@ export class SidePanel extends Container {
     });
     this.buy.position.set(L.centerX, L.buyY);
 
-    this.luck = new SidePanelButton({
+    this.holdRespin = new SidePanelButton({
       width: L.width,
       height: L.height,
-      texture: SIDE.luckOff,
-      activeTexture: SIDE.luckOn,
-      plateY: 0.852,
-      onPress: callbacks.onToggleLuckBoost,
+      texture: SIDE.buyHoldRespin,
+      plateY: 0.86,
+      onPress: callbacks.onBuyHoldRespin,
     });
-    this.luck.position.set(L.centerX, L.luckY);
+    this.holdRespin.position.set(L.centerX, L.luckY);
 
-    this.addChild(this.buy, this.luck);
+    this.addChild(this.buy, this.holdRespin);
   }
 
   /** Advance the lit/dull easing on both panels. Call once per frame (ms). */
   update(dtMs: number): void {
     this.buy.update(dtMs);
-    this.luck.update(dtMs);
+    this.holdRespin.update(dtMs);
   }
 
   /** Show the cost of buying the bonus on the Buy Bonus plate. */
@@ -54,29 +53,24 @@ export class SidePanel extends Container {
     this.buy.setPlateText(text);
   }
 
-  /** Reflect the Luck Boost (Chance x2) on/off state. */
-  setLuckBoost(active: boolean): void {
-    this.luck.setActive(active);
-  }
-
-  /** Show the surcharge that enabling Luck Boost adds (e.g. "+7.50"). */
-  setLuckCost(text: string): void {
-    this.luck.setPlateText(text);
+  /** Show the cost of buying Hold & Respin on its plate. */
+  setHoldRespinPrice(text: string): void {
+    this.holdRespin.setPlateText(text);
   }
 
   /** Live only while idle in the base game (mirrors the bet/turbo controls). */
   setEnabled(enabled: boolean): void {
     this.buy.setEnabled(enabled);
-    this.luck.setEnabled(enabled);
+    this.holdRespin.setEnabled(enabled);
   }
 
   /**
    * Ease both panels into / out of the "locked out" look while a bonus round
-   * owns the screen (they can't be bought / toggled during Free Spins or Hold &
-   * Respin). Separate from {@link setEnabled} so a brief base spin stays subtle.
+   * owns the screen (they can't be bought during Free Spins or Hold & Respin).
+   * Separate from {@link setEnabled} so a brief base spin stays subtle.
    */
   setLockedOut(lockedOut: boolean): void {
     this.buy.setLockedOut(lockedOut);
-    this.luck.setLockedOut(lockedOut);
+    this.holdRespin.setLockedOut(lockedOut);
   }
 }

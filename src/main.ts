@@ -15,9 +15,9 @@ void scene.init(container);
 
 // Drive from the console:
 //   await game.spin()        · base spin
-//   game.setChance2x(true)   · then spin for denser scatters at 2x cost
 //   game.buyBonus('mega')    · then loop: await game.spin()  (free spins)
-//   game.debugTriggerHoldAndRespin()  · jump straight into Hold & Respin
+//   game.buyHoldAndRespin()  · buy straight into Hold & Respin (3x the bet)
+//   game.debugTriggerHoldAndRespin()  · jump in free (debug)
 // (Or trigger Hold & Respin naturally by landing 5 trophies on a base spin.)
 (window as unknown as { game: Game }).game = game;
 console.info(

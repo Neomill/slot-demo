@@ -2,7 +2,7 @@ import { BlurFilter, ColorMatrixFilter, Container, Graphics, Text } from 'pixi.j
 import type { SymbolId } from '../config/symbols';
 import { SYMBOLS, SCATTER } from '../config/symbols';
 import type { LineWin, Position, PrizeCell } from '../types/slot';
-import { ANTICIPATION, CELL, COLS, ROWS, SPIN, SEPARATOR, WIN_FX, fontFamily, colors } from './theme';
+import { ANTICIPATION, CELL, COLS, ROWS, SPIN, SEPARATOR, WIN_FX, HOLD_RESPIN_FX, fontFamily, colors } from './theme';
 import { makeSymbolSprite } from './SymbolSprite';
 import { planAnticipation, type AnticipationPlan } from './anticipation';
 import type { WinFxParams } from './winFx';
@@ -644,6 +644,45 @@ export class Reels extends Container {
     });
   }
 
+  /**
+   * Hold & Respin "Golden Freeze" — the recognition moment as the feature
+   * triggers. Every non-trophy tile fades back; each locked trophy stays lit,
+   * blooms a soft gold glow, bursts a shockwave, and bounces. The board gives a
+   * short shake. Resolves once the beat has held, restoring the dimmed tiles.
+   */
+  async playTrophyFreeze(locked: boolean[][]): Promise<void> {
+    const dimmed: Container[] = [];
+    for (let reel = 0; reel < COLS; reel++) {
+      for (let row = 0; row < ROWS; row++) {
+        const tile = this.columns[reel]?.getTile(row);
+        if (!tile) continue;
+        if (locked[reel]?.[row]) {
+          const c = cellCenter(reel, row);
+          this.spawnGoldGlow(c.x, c.y, HOLD_RESPIN_FX.freezeGlowPeak, HOLD_RESPIN_FX.freezeHoldMs);
+          this.spawnShockwave(c.x, c.y);
+          this.bounces.push({ tile, elapsed: 0 });
+        } else {
+          tile.alpha = HOLD_RESPIN_FX.freezeDimAlpha;
+          dimmed.push(tile);
+        }
+      }
+    }
+    this.startWinShake(HOLD_RESPIN_FX.freezeShakeAmp, HOLD_RESPIN_FX.freezeShakeMs);
+    await wait(HOLD_RESPIN_FX.freezeHoldMs);
+    for (const tile of dimmed) tile.alpha = 1;
+  }
+
+  /** A blurred, additive gold disc that blooms (0 → peak → 0) at a board point. */
+  private spawnGoldGlow(x: number, y: number, peak: number, duration: number): void {
+    const node = new Graphics().circle(0, 0, CELL.width * 0.4).fill({ color: colors.accent });
+    node.position.set(x, y);
+    node.alpha = 0;
+    node.blendMode = 'add';
+    node.filters = [new BlurFilter({ strength: 14, quality: 2 })];
+    this.winLayer.addChild(node);
+    this.softGlows.push({ node, elapsed: 0, duration, peak });
+  }
+
   /** Hold & Respin: snap to the board and outline the locked cells. */
   showLocked(grid: SymbolId[][], locked: boolean[][]): void {
     this.clearRespins();
@@ -764,7 +803,13 @@ export class Reels extends Container {
         cell.arrived = true;
         this.columns[cell.reel]?.setRowVisible(cell.row, true);
         this.respinLayer.removeChild(cell.container);
-        if (cell.locksOnLand) this.addLockMarker(cell.reel, cell.row); // trophy just landed
+        if (cell.locksOnLand) {
+          // A trophy just landed and locks — impact: outline, shockwave, bloom.
+          this.addLockMarker(cell.reel, cell.row);
+          const c = cellCenter(cell.reel, cell.row);
+          this.spawnShockwave(c.x, c.y);
+          this.spawnGoldGlow(c.x, c.y, HOLD_RESPIN_FX.lockGlowPeak, HOLD_RESPIN_FX.lockGlowMs);
+        }
       } else {
         allArrived = false;
       }
