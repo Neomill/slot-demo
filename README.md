@@ -23,13 +23,13 @@ Then open the URL Vite prints (default http://localhost:5173).
 
 ## Scripts
 
-| Command | Description |
-| --- | --- |
-| `npm run dev` | Start the local dev server. |
-| `npm run build` | Type-check and build for production into `dist/`. |
-| `npm run preview` | Serve the production build locally. |
-| `npm test` | Run the unit tests (Vitest). |
-| `npm run test:watch` | Run the tests in watch mode. |
+| Command              | Description                                       |
+| -------------------- | ------------------------------------------------- |
+| `npm run dev`        | Start the local dev server.                       |
+| `npm run build`      | Type-check and build for production into `dist/`. |
+| `npm run preview`    | Serve the production build locally.               |
+| `npm test`           | Run the unit tests (Vitest).                      |
+| `npm run test:watch` | Run the tests in watch mode.                      |
 
 ## Project structure
 
@@ -52,14 +52,12 @@ The view never owns game logic: the engine emits events, the scene renders state
 The engine is exposed on `window.game` for quick console play:
 
 ```js
-await game.spin()                  // base spin
-game.buyBonus('super')             // buy Free Spins, then loop: await game.spin()
-game.buyHoldAndRespin()            // buy into Hold & Respin (3× the bet)
-game.debugTriggerHoldAndRespin()   // force Hold & Respin (free, debug)
+await game.spin(); // base spin
+game.buyBonus("super"); // buy Free Spins, then loop: await game.spin()
+game.buyHoldAndRespin(); // buy into Hold & Respin (3× the bet)
+game.debugTriggerHoldAndRespin(); // force Hold & Respin (free, debug)
 ```
 
 ## Tech
 
 PixiJS 8 · TypeScript · Vite · Vitest. Audio plays from a single sprite via the Web Audio API.
-
-> This is a demo project for entertainment/educational purposes — not real-money gambling.
