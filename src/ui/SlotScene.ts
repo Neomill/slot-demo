@@ -40,6 +40,7 @@ import { SidePanel } from "./SidePanel";
 import { FreeSpinPanel } from "./FreeSpinPanel";
 import { FeatureBeam } from "./FeatureBeam";
 import { HoldRespinPanel } from "./HoldRespinPanel";
+import { WinCelebration } from "./WinCelebration";
 import { money } from "./hud/text";
 
 // Pleasant resting board shown before the first spin.
@@ -146,6 +147,26 @@ function buyBonusBoard(): SymbolId[][] {
   return grid;
 }
 
+/**
+ * A display-only base board (all normal symbols) shown when returning to base
+ * play after a bonus, so the reels land on a fresh set rather than leaving the
+ * bonus board up. Purely cosmetic — the next real spin replaces it.
+ */
+function baseDisplayBoard(): SymbolId[][] {
+  const { reels, rows } = gameConfig;
+  const grid: SymbolId[][] = [];
+  for (let reel = 0; reel < reels; reel++) {
+    const column: SymbolId[] = [];
+    for (let row = 0; row < rows; row++) {
+      column.push(
+        FILLER_SYMBOLS[Math.floor(Math.random() * FILLER_SYMBOLS.length)],
+      );
+    }
+    grid.push(column);
+  }
+  return grid;
+}
+
 /** Ensure Barlow Condensed is ready before Pixi rasterizes any text with it. */
 async function loadFonts(): Promise<void> {
   if (!("fonts" in document)) return;
@@ -175,6 +196,7 @@ export class SlotScene {
   private sidePanel!: SidePanel;
   private freeSpinPanel!: FreeSpinPanel;
   private holdRespinPanel!: HoldRespinPanel;
+  private winCelebration!: WinCelebration;
   private bloom!: Graphics;
   /** Darkens the reels while a Wild Charge beam travels (Phase 3 camera focus). */
   private featureDim!: Graphics;
@@ -195,6 +217,9 @@ export class SlotScene {
   /** Background brightness (1 = full) and the value we're easing toward. */
   private bgBright = 1;
   private bgBrightTarget = 1;
+  /** A finished bonus' total + bet, queued for the win-celebration modal once
+   *  the last spin's presentation completes (set on FreeSpinsEnd/HoldRespinEnd). */
+  private pendingCelebration: { totalWin: number; bet: number } | null = null;
 
   constructor(game: Game) {
     this.game = game;
@@ -229,6 +254,7 @@ export class SlotScene {
       this.sidePanel.update(ticker.deltaMS);
       this.freeSpinPanel.update(ticker.deltaMS);
       this.holdRespinPanel.update(ticker.deltaMS);
+      this.winCelebration.update(ticker.deltaMS);
       this.featureBeam.update(ticker.deltaMS);
       this.updateBloom(ticker.deltaMS);
       this.updateBackgroundDim(ticker.deltaMS);
@@ -333,6 +359,7 @@ export class SlotScene {
 
     this.freeSpinPanel = new FreeSpinPanel();
     this.holdRespinPanel = new HoldRespinPanel();
+    this.winCelebration = new WinCelebration();
 
     // Phase 3 camera focus: a dark plate over the frame/reels that fades in while
     // a Wild Charge beam travels, so the lit panel above reads as the focal point.
@@ -371,6 +398,7 @@ export class SlotScene {
       this.holdRespinPanel,
       this.featureBeam,
       this.hud,
+      this.winCelebration, // a modal — sits above everything, including the HUD
     );
   }
 
@@ -439,6 +467,18 @@ export class SlotScene {
     // chargingWilds) handles this correctly, so we deliberately don't refresh here.
     events.on(GameEvent.HoldRespinStart, () => this.refreshFreeSpinOverlay());
     events.on(GameEvent.HoldRespinUpdate, () => this.refreshFreeSpinOverlay());
+    // A bonus just ended — queue the win celebration (played at the end of the
+    // final spin's render(), once its presentation has settled). These fire
+    // mid-render() of that last spin, so we only stash the values here.
+    events.on(GameEvent.FreeSpinsEnd, ({ totalWin }) => this.queueWinCelebration(totalWin));
+    events.on(GameEvent.HoldRespinEnd, ({ totalWin }) => this.queueWinCelebration(totalWin));
+  }
+
+  /** Stash a finished bonus' total for the celebration if it clears the Big Win
+   *  threshold (1× the total bet); below that, no modal plays. */
+  private queueWinCelebration(totalWin: number): void {
+    const bet = this.game.currentBet;
+    if (totalWin >= bet) this.pendingCelebration = { totalWin, bet };
   }
 
   private async render(result: SpinResult): Promise<void> {
@@ -543,6 +583,24 @@ export class SlotScene {
     // panel opens, transfers its spins to the counter as energy orbs, then is
     // consumed — chaining through every queued panel before auto-play resumes.
     if (result.pendingActivation) await this.playQueuedActivation();
+
+    // A bonus just ended this spin (mode is back to BASE): celebrate, then
+    // transition into base play. busy stays true so the controls stay locked
+    // through the whole hand-off.
+    const bonusJustEnded =
+      result.mode !== GameMode.BASE && this.game.currentMode === GameMode.BASE;
+    if (bonusJustEnded) {
+      // Show the Big Win modal first (if the total cleared the threshold)…
+      if (this.pendingCelebration) {
+        const { totalWin, bet } = this.pendingCelebration;
+        this.pendingCelebration = null;
+        await this.winCelebration.play(totalWin, bet);
+      }
+      // …then transition back to the base game on a fresh set of symbols, so the
+      // bonus board doesn't linger behind the returned controls.
+      await this.reels.spin(baseDisplayBoard(), [], this.game.betPerLine);
+      this.hud.setWin(0);
+    }
 
     this.busy = false;
     this.refreshControls();

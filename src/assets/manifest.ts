@@ -38,6 +38,14 @@ import buttonTurbo from "./game-control/button-turbo.png";
 import buyBonus from "./buy-bunos.png";
 import buyHoldRespin from "./buy-hold-and-respin.png";
 
+import bigWin from "./win-display/big-win.png";
+import megaWin from "./win-display/mega-win.png";
+import epicWin from "./win-display/epic-win.png";
+import legendaryWin from "./win-display/legendary-win.png";
+import winAmountLeft from "./win-display/win-amount-background-left.png";
+import winAmountCenter from "./win-display/win-amount-background-center.png";
+import winAmountRight from "./win-display/win-amount-background-right.png";
+
 import freeSpinBgLarge from "./free-spin-panel/free-spin-bg-counter-large.png";
 import freeSpinBgSmall from "./free-spin-panel/free-spin-bg-counter-small.png";
 import wildLock from "./free-spin-panel/wild-lock.png";
@@ -124,6 +132,23 @@ export const FREE_SPIN = {
   ] as const,
 };
 
+/**
+ * Win celebration art (the Big/Mega/Epic/Legendary modal shown after a bonus):
+ * one gold word-mark per tier, plus the three slices of the win-amount frame
+ * (left + right caps with a centre that stretches to fit the amount).
+ */
+export const WIN_DISPLAY = {
+  tiers: {
+    big: bigWin,
+    mega: megaWin,
+    epic: epicWin,
+    legendary: legendaryWin,
+  },
+  amountLeft: winAmountLeft,
+  amountCenter: winAmountCenter,
+  amountRight: winAmountRight,
+};
+
 /** Every asset URL, for preloading through pixi's Assets in one pass. */
 export const ALL_ASSET_URLS: string[] = [
   ...Object.values(SYMBOL_TEXTURES),
@@ -131,6 +156,10 @@ export const ALL_ASSET_URLS: string[] = [
   ...Object.values(CONTROL),
   ...Object.values(SIDE),
   ...Object.values(FREE_SPIN).flat(),
+  ...Object.values(WIN_DISPLAY.tiers),
+  WIN_DISPLAY.amountLeft,
+  WIN_DISPLAY.amountCenter,
+  WIN_DISPLAY.amountRight,
   FRAME,
   LOGO,
 ];

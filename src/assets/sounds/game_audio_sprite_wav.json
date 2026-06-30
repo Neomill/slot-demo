@@ -1,0 +1,62 @@
+{
+  "resources": [
+    "game_audio_sprite.wav"
+  ],
+  "spritemap": {
+    "panel-charge": {
+      "start": 0,
+      "end": 940,
+      "loop": false
+    },
+    "hold-and-respin-lock": {
+      "start": 1040,
+      "end": 1615,
+      "loop": false
+    },
+    "spin-click": {
+      "start": 1715,
+      "end": 2185,
+      "loop": false
+    },
+    "coin-counter": {
+      "start": 2285,
+      "end": 7661,
+      "loop": false
+    },
+    "win-sfx": {
+      "start": 7761,
+      "end": 11784,
+      "loop": false
+    },
+    "free-spin-award": {
+      "start": 11884,
+      "end": 15940,
+      "loop": false
+    },
+    "wild-send-money-to-panel": {
+      "start": 16040,
+      "end": 25836,
+      "loop": false
+    },
+    "collect-horse-points": {
+      "start": 25936,
+      "end": 26589,
+      "loop": false
+    },
+    "base-background": {
+      "start": 26689,
+      "end": 37687,
+      "loop": false
+    },
+    "bonus-background": {
+      "start": 37787,
+      "end": 48497,
+      "loop": false
+    },
+    "wild-appers": {
+      "start": 48597,
+      "end": 49694,
+      "loop": false
+    }
+  }
+}

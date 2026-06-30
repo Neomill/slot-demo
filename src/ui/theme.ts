@@ -369,6 +369,54 @@ export const HOLD_RESPIN_FX = {
   rewindInMs: 320, // new number slams down
 } as const;
 
+/**
+ * Win-tier thresholds for the post-bonus celebration modal, as multiples of the
+ * total bet. A tier is reached when the running win meets its `minMultiple`;
+ * order matters (ascending) — the highest reached tier wins. Below `big` (1×)
+ * no celebration plays. The id keys line up with `WIN_DISPLAY.tiers` art.
+ */
+export const WIN_TIERS = [
+  { id: 'big', minMultiple: 1 },
+  { id: 'mega', minMultiple: 20 },
+  { id: 'epic', minMultiple: 40 },
+  { id: 'legendary', minMultiple: 80 },
+] as const;
+
+export type WinTierId = (typeof WIN_TIERS)[number]['id'];
+
+/**
+ * The post-bonus "Big Win" celebration modal (see WinCelebration). A dimmed
+ * backdrop, the tier word-mark up top, and the win amount inside a framed plate
+ * that counts up 0 → total — the tier art escalating live as the count crosses
+ * each threshold. All presentation-only; tap to fast-forward / dismiss.
+ */
+export const WIN_CELEBRATION = {
+  /** Solid-black scrim opacity behind the modal. */
+  backdropAlpha: 0.8,
+  /** Tier word-mark rendered width (height follows the art's 681×311 aspect). */
+  tierWidth: 560,
+  /**
+   * The word-mark sits just above the amount frame and overlaps its top edge, so
+   * the two read as one stacked unit (tier is drawn on top of the frame, the
+   * amount on top of both). Nudge these together/apart to taste.
+   */
+  tierCenterY: 400,
+  /** Win-amount frame: rendered height, and the native cap art's height. */
+  frameHeight: 150,
+  capNativeWidth: 96,
+  capNativeHeight: 195,
+  frameCenterY: 540,
+  /** Smallest the stretched centre slice can shrink to, and the amount's padding. */
+  frameMinCenterWidth: 200,
+  framePadX: 64,
+  inMs: 320, // backdrop + plate entrance
+  countBaseMs: 1500, // count-up time for a Big Win…
+  countPerTierMs: 650, // …plus this for each higher tier reached
+  holdMs: 1600, // hold at full before auto-dismiss
+  outMs: 360,
+  tierPunchMs: 200, // tier word-mark scale pop when it escalates
+} as const;
+
 export const hudColors = {
   barTop: 0x16243f,
   barBottom: 0x080d18,
