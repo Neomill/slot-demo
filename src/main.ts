@@ -11,7 +11,14 @@ if (!container) throw new Error("Missing #app container");
 
 const game = new Game();
 const scene = new SlotScene(game);
-void scene.init(container);
+void scene.init(container).then(() => {
+  // Fade out the text loader once assets, fonts and audio are ready.
+  const loader = document.querySelector("#loader");
+  loader?.classList.add("hidden");
+  loader?.addEventListener("transitionend", () => loader.remove(), {
+    once: true,
+  });
+});
 
 // Drive from the console:
 //   await game.spin()        · base spin
