@@ -20,9 +20,9 @@ import wild from "./symbols/symbol-wild.png";
 import bonus from "./symbols/symbol-bonus.png";
 import trophy from "./symbols/symbol-trophy.png";
 
-import baseBackground from "./background/base-background.png";
-import freeSpinBackground from "./background/freespin-background.png";
-import holdRespinBackground from "./background/hold-spin-background.png";
+import baseBackground from "./background/base-background.webp";
+import freeSpinBackground from "./background/freespin-background.webp";
+import holdRespinBackground from "./background/hold-spin-background.webp";
 import frame from "./frame.png";
 import logo from "./logo.png";
 

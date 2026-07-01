@@ -1,4 +1,4 @@
-import spriteUrl from "../assets/sounds/game_audio_sprite.wav";
+import spriteUrl from "../assets/sounds/game_audio_sprite.ogg";
 import spriteData from "../assets/sounds/game_audio_sprite_wav.json";
 
 /** One region of the audio sprite: a slice of the single .wav, in milliseconds. */
